@@ -14,6 +14,8 @@
  * single interpolation site, with no exceptions.
  */
 
+import type { Conflict } from '@/lib/contracts';
+
 /** A structural view of an extraction report — deliberately independent of
  *  `lib/ai/extract.ts` (owned by a concurrent agent) so this file has no
  *  compile-time dependency on it. Satisfied structurally by the real
@@ -56,6 +58,49 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+/** A structural view of one conflict for rendering — deliberately independent
+ *  of `lib/ai/reconcile.ts` / `lib/ai/conflict.ts` / `lib/ai/group.ts` (the
+ *  file avoids importing them, per its own pattern above) so this module has
+ *  no compile-time coupling to the reconciliation pipeline. Satisfied
+ *  structurally by whatever the route builds.
+ *
+ *  `_viewCoversConflictContract` below ties its scalar fields to the frozen
+ *  `Conflict` contract at typecheck time. Without that tie, a contract rename
+ *  (`generated_question` -> something else) would leave this view compiling
+ *  happily and rendering a blank question. */
+export interface InspectConflictView {
+  readonly id: string;
+  readonly ontology_key: string;
+  readonly subject: string;
+  readonly generated_question: string;
+  readonly resolution: string;
+  readonly claims: ReadonlyArray<{
+    readonly id: string;
+    readonly value: string;
+    readonly quote: string;
+    readonly source_title: string;
+    readonly asserted_at: string | null;
+  }>;
+}
+
+/**
+ * Load-bearing, typecheck-time. `claim_ids` is deliberately replaced by a
+ * resolved `claims` array (the page shows quotes, not bare uuids) and
+ * `person_id` is not rendered; every OTHER field of the frozen `Conflict`
+ * contract must be present here, and this view may not invent fields the
+ * contract does not have. Add or rename a field in `lib/contracts.ts` and this
+ * fails to compile — which is the point.
+ */
+type ConflictScalarKeys = Exclude<keyof Conflict, 'person_id' | 'claim_ids'>;
+type ViewScalarKeys = Exclude<keyof InspectConflictView, 'claims'>;
+type _ViewCoversConflictContract = [ViewScalarKeys] extends [ConflictScalarKeys]
+  ? [ConflictScalarKeys] extends [ViewScalarKeys]
+    ? true
+    : never
+  : never;
+const _viewCoversConflictContract: _ViewCoversConflictContract = true;
+void _viewCoversConflictContract;
 
 function fmtLocatorPart(n: number | null): string {
   return n === null ? '—' : escapeHtml(String(n));
@@ -176,7 +221,10 @@ function renderSource(report: InspectReportView): string {
     </section>`;
 }
 
-function renderSummaryBar(reports: readonly InspectReportView[]): string {
+function renderSummaryBar(
+  reports: readonly InspectReportView[],
+  conflicts: readonly InspectConflictView[],
+): string {
   const totalSources = reports.length;
   const totalKept = reports.reduce((sum, r) => sum + r.kept.length, 0);
   const totalDropped = reports.reduce((sum, r) => sum + r.dropped.length, 0);
@@ -203,10 +251,74 @@ function renderSummaryBar(reports: readonly InspectReportView[]): string {
         <span class="summary-label">dropped</span>
       </div>
       <div class="summary-stat">
+        <span class="summary-number summary-number-conflict">${escapeHtml(String(conflicts.length))}</span>
+        <span class="summary-label">disagreements</span>
+      </div>
+      <div class="summary-stat">
         <span class="summary-number-small">${modes.map(escapeHtml).join(', ') || '—'}</span>
         <span class="summary-label">mode(s)</span>
       </div>
       ${anyRetried ? '<div class="summary-retried-flag">One or more sources were retried once before this result.</div>' : ''}
+    </section>`;
+}
+
+function renderConflictCard(conflict: InspectConflictView): string {
+  const rows = conflict.claims
+    .map(
+      (c) => `
+        <tr>
+          <td>${escapeHtml(c.source_title)}</td>
+          <td>${c.asserted_at === null ? '—' : escapeHtml(c.asserted_at)}</td>
+          <td>${escapeHtml(c.value)}</td>
+          <td class="mono quote-cell">${escapeHtml(c.quote)}</td>
+        </tr>`,
+    )
+    .join('');
+
+  return `
+    <div class="conflict-card">
+      <div class="conflict-meta">
+        <span class="pill">subject: ${escapeHtml(conflict.subject)}</span>
+        <span class="pill">ontology_key: ${escapeHtml(conflict.ontology_key)}</span>
+        <span class="pill">resolution: ${escapeHtml(conflict.resolution)}</span>
+        <span class="pill">id: ${escapeHtml(conflict.id)}</span>
+      </div>
+      <p class="conflict-question">${escapeHtml(conflict.generated_question)}</p>
+      <table class="conflict-table">
+        <thead>
+          <tr>
+            <th>source</th>
+            <th>asserted</th>
+            <th>value</th>
+            <th>quote</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+/**
+ * The "Disagreements between sources" section — placed above the per-source
+ * tables so it is the first thing a reviewer sees. Every value interpolated
+ * here (subject, question, resolution, ids, dates, values, quotes, titles)
+ * is untrusted transcript-derived text and goes through `escapeHtml`.
+ */
+function renderConflictsSection(conflicts: readonly InspectConflictView[]): string {
+  const body =
+    conflicts.length === 0
+      ? '<p class="empty-note">No disagreements were detected between the sources shown below.</p>'
+      : conflicts.map(renderConflictCard).join('');
+
+  return `
+    <section class="conflicts-section">
+      <h2 class="conflicts-heading">Disagreements between sources</h2>
+      <p class="conflicts-explainer">
+        A disagreement here is never resolved automatically. This page shows what each
+        source says and the question that follows from the disagreement — a question a
+        clinician can answer. It does not decide which source is right.
+      </p>
+      ${body}
     </section>`;
 }
 
@@ -281,6 +393,7 @@ const STYLE = `
   }
   .summary-number-pass { color: var(--citation-ink); }
   .summary-number-drop { color: var(--unverified-ink); }
+  .summary-number-conflict { color: var(--brand); }
   .summary-label {
     font-size: 0.8rem;
     color: var(--ink-muted);
@@ -312,6 +425,53 @@ const STYLE = `
     border-radius: 12px;
     padding: 2rem;
     color: var(--ink-muted);
+  }
+  .conflicts-section {
+    background: white;
+    border: 2px solid var(--brand);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 3rem;
+  }
+  .conflicts-heading {
+    font-size: 1.5rem;
+    margin: 0 0 0.5rem;
+    color: var(--brand);
+  }
+  .conflicts-explainer {
+    max-width: 60rem;
+    color: var(--ink-muted);
+    font-size: 0.95rem;
+    margin: 0 0 1.5rem;
+  }
+  .conflict-card {
+    background: var(--citation-bg);
+    border: 1px solid var(--citation-mid);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .conflict-card:last-child { margin-bottom: 0; }
+  .conflict-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .conflict-question {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--brand);
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    background: white;
+    border-left: 4px solid var(--brand);
+    border-radius: 4px;
+  }
+  .conflict-table {
+    background: white;
+    border-radius: 4px;
+    overflow: hidden;
   }
   .source-block {
     background: white;
@@ -451,6 +611,7 @@ const STYLE = `
 export function renderInspectPage(
   reports: readonly InspectReportView[],
   pageNotice: string | null = null,
+  conflicts: readonly InspectConflictView[] = [],
 ): string {
   // Interpolated, not spliced into the finished document by the caller: a
   // String.replace() on the rendered page would treat `$&` in the note as a
@@ -473,7 +634,8 @@ export function renderInspectPage(
           and appears only in the red section for its source — a dropped claim is never
           shown to a user anywhere else in the product.
         </p>
-        ${renderSummaryBar(reports)}
+        ${renderSummaryBar(reports, conflicts)}
+        ${renderConflictsSection(conflicts)}
         ${reports.map(renderSource).join('')}`;
 
   return `<!doctype html>
