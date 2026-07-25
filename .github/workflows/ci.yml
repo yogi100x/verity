@@ -1,0 +1,122 @@
+---
+name: CI
+
+# Runs on every PR to main and every push to main, per docs/stack-freeze.md
+# ("CI: GitHub Actions | typecheck -> test -> Vercel preview, on every PR").
+"on":
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# One run per PR (or per pushed branch). A new commit cancels the superseded run,
+# but pushes to main are never cancelled -- main's history must stay fully verified.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Least privilege: nothing here writes to the repo.
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Typecheck & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm/action-setup MUST run before actions/setup-node, because `cache: pnpm`
+      # shells out to `pnpm store path` to locate the store it caches.
+      # Version is the pnpm major frozen in docs/stack-freeze.md (pnpm 11.x).
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      # --frozen-lockfile: the install fails rather than mutating pnpm-lock.yaml.
+      # This is the stack freeze's enforcement point -- an un-approved dependency
+      # (or a stale lockfile) turns the PR red here.
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # lib/__tests__/contract.test.ts (the keystone test) runs as part of this suite.
+      # It validates every lane's fixture against the frozen contract. If this goes red,
+      # every lane is building against a lie -- stop everything, escalate immediately,
+      # do not merge anything until it is green again.
+      - name: Test
+        run: pnpm test
+
+  vercel-preview:
+    name: Vercel Preview Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build-and-test
+    # NOTE: the `secrets` context is NOT available in a job-level `if` -- GitHub
+    # rejects the whole workflow file with "Unrecognized named-value: 'secrets'",
+    # which would take typecheck and test down with it. Gate on `vars` instead
+    # (vars IS available here) and set repository variable VERCEL_DEPLOY_ENABLED=1
+    # once the project is linked and VERCEL_TOKEN is set.
+    # The head-repo check excludes fork PRs, which never receive secrets.
+    if: >-
+      github.event_name == 'pull_request'
+      && vars.VERCEL_DEPLOY_ENABLED == '1'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      # Fail fast with a message an orchestrator can act on, rather than a
+      # bare CLI error 90 seconds later.
+      - name: Check Vercel credentials are present
+        run: |
+          missing=""
+          [ -n "$VERCEL_TOKEN" ] || missing="$missing secrets.VERCEL_TOKEN"
+          [ -n "$VERCEL_ORG_ID" ] || missing="$missing vars.VERCEL_ORG_ID"
+          [ -n "$VERCEL_PROJECT_ID" ] || missing="$missing vars.VERCEL_PROJECT_ID"
+          if [ -n "$missing" ]; then
+            echo "VERCEL_DEPLOY_ENABLED=1 but missing:$missing" >&2
+            echo "Set them, or unset VERCEL_DEPLOY_ENABLED to skip this job." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # Prebuilt preview deploy via the Vercel CLI, run through npx so the CLI is
+      # never a project dependency (stack freeze). pull -> build locally -> upload
+      # the built artifact with --prebuilt, which is why build must precede deploy.
+      - name: Pull Vercel environment
+        run: npx --yes vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Build
+        run: npx --yes vercel build --token="$VERCEL_TOKEN"
+
+      - name: Deploy preview
+        run: npx --yes vercel deploy --prebuilt --token="$VERCEL_TOKEN"
