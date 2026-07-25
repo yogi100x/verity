@@ -4,14 +4,14 @@
  * The orchestrator cannot read code; this page is how the substring kill
  * switch (`lib/ai/verify.ts`) is SEEN working. It must render with no
  * `ANTHROPIC_API_KEY` and no database, because `fixtures` is the default
- * mode — that is the whole point of the modes seam in `lib/ai/modes.ts`.
+ * mode — that is the whole point of the mode seam, `callModel` in `@/lib/modes`.
  *
  * Never crashes into a Next.js error overlay: every failure mode below is
  * caught and turned into a readable HTML page instead, because a stack
  * trace is useless to a non-coder reviewer.
  */
 
-import { resolveMode, anthropicFor, MissingCredentialsError, type Mode } from '@/lib/ai/modes';
+import { resolveMode, type Mode } from '@/lib/modes';
 import { extractAll, type ExtractionReport } from '@/lib/ai/extract';
 import {
   renderInspectPage,
@@ -382,29 +382,25 @@ async function reportsFor(mode: Mode): Promise<{ reports: ExtractionReport[]; no
     return { reports: await extractAll(mode), note: null };
   }
 
-  // Validates credentials for the requested mode. Throws
-  // MissingCredentialsError when the key is absent; the caller's catch turns
-  // that into a readable page. Returns non-null for 'live' by contract.
-  anthropicFor(mode);
-
   // No uploaded-sources registry exists yet in this lane — live extraction
-  // needs sources to extract from. Rather than crash, fall back to the
-  // fixtures reports and say so plainly.
+  // needs sources to extract from, and this page has no upload flow. Rather
+  // than crash, fall back to the fixtures reports and say so plainly. This is
+  // true regardless of whether ANTHROPIC_API_KEY is set: `callModel` would
+  // degrade to a fixture lookup on a missing key too (never an error), but
+  // there is no source to send it in the first place here.
   return {
     reports: await extractAll('fixtures'),
-    note: 'Live mode requested, but no sources have been uploaded yet in this session — showing the fixtures reports instead.',
+    note:
+      'Live mode requested, but this inspector page has no upload flow, so there ' +
+      'is no source to extract live from — showing the fixtures reports instead. ' +
+      '(POST a document to /api/extract?mode=live, with ANTHROPIC_API_KEY set in ' +
+      '.env.local, to see a real extraction; without the key that call would ' +
+      'degrade to a fixture lookup too, never error.)',
   };
 }
 
 export async function GET(request: Request): Promise<Response> {
-  let mode: Mode;
-  try {
-    mode = resolveMode(new URL(request.url));
-  } catch (err) {
-    return html(
-      problemPage('Could not read the request', err instanceof Error ? err.message : String(err)),
-    );
-  }
+  const mode: Mode = resolveMode({ searchParam: new URL(request.url).searchParams.get('mode') });
 
   try {
     const { reports, note } = await reportsFor(mode);
@@ -412,15 +408,6 @@ export async function GET(request: Request): Promise<Response> {
     const artifacts = artifactsFor(rawFacts, claimById, sourcesById, fixture.person.id, conflicts);
     return html(renderInspectPage(reports, note, conflicts, facts, artifacts));
   } catch (err) {
-    if (err instanceof MissingCredentialsError) {
-      return html(
-        problemPage(
-          'Live mode needs an API key',
-          `${err.message} Nothing crashed — this page just cannot show live extraction until ANTHROPIC_API_KEY is set in .env.local. Visit this page with ?mode=fixtures (the default) to see the pipeline working with no key and no network.`,
-        ),
-      );
-    }
-
     const message = err instanceof Error ? err.message : String(err);
     return html(problemPage('Extraction inspector failed', `Something went wrong while building this page: ${message}`));
   }

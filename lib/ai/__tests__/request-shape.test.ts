@@ -6,11 +6,18 @@
  * tests and not comments: `budget_tokens` on Sonnet, a stray `temperature`, an
  * assistant-turn prefill, `strict` on `tool_choice`, or a date-suffixed model
  * id are all silent until the first live call.
+ *
+ * Every call goes through the mode seam (`callModel`, `@/lib/modes`) via an
+ * injected `transport` — never a stub of the Anthropic SDK client. That is
+ * what proves `fixtures`/`replay` make zero network calls by construction: a
+ * transport that throws when invoked, still succeeding, is the strongest
+ * statement this suite can make about "no network".
  */
 
 import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
-import { callForcedTool, ToolCallFailedError, type MessagesClient } from '@/lib/ai/client';
+import { createInMemoryFixtureStore, requestHash, type ModelRequest, type ModelTransport } from '@/lib/modes';
+import { callForcedTool, ToolCallFailedError, type CallSeamOptions } from '@/lib/ai/client';
 import { MODELS, MIN_THINKING_BUDGET, modelParams } from '@/lib/ai/models';
 import { EXTRACTION_TOOL } from '@/lib/ai/prompts';
 import { extractSourceLive, type RawClaim } from '@/lib/ai/extract';
@@ -55,26 +62,34 @@ function toolUse(input: unknown): Anthropic.ContentBlock {
   return { type: 'tool_use', id: 'toolu_test', name: EXTRACTION_TOOL.name, input, caller: { type: 'direct' } };
 }
 
-/** A client that records every request and replays canned responses in order. */
+/** A transport that records every request and replays canned responses in order. */
 function recorder(responses: Anthropic.Message[]): {
-  client: MessagesClient;
-  calls: Anthropic.MessageCreateParamsNonStreaming[];
+  transport: ModelTransport;
+  calls: ModelRequest[];
 } {
-  const calls: Anthropic.MessageCreateParamsNonStreaming[] = [];
+  const calls: ModelRequest[] = [];
   let index = 0;
-  const client: MessagesClient = {
-    messages: {
-      create(params) {
-        calls.push(params);
-        const next = responses[Math.min(index, responses.length - 1)];
-        index += 1;
-        if (next === undefined) throw new Error('recorder: no canned response');
-        return Promise.resolve(next);
-      },
-    },
+  const transport: ModelTransport = (request) => {
+    calls.push(request);
+    const next = responses[Math.min(index, responses.length - 1)];
+    index += 1;
+    if (next === undefined) throw new Error('recorder: no canned response');
+    return Promise.resolve(next);
   };
-  return { client, calls };
+  return { transport, calls };
 }
+
+/** Every live-mode call in this suite gets its own in-memory store — never
+ *  the real `fixtures/recorded/` tree, which `scripts/verify.sh` guards. */
+function liveOpts(transport: ModelTransport): CallSeamOptions {
+  return { mode: 'live', transport, store: createInMemoryFixtureStore() };
+}
+
+/** A transport that fails the test if it is ever invoked — proves
+ *  fixtures/replay make zero network calls by construction. */
+const throwingTransport: ModelTransport = () => {
+  throw new Error('transport must not be called in fixtures/replay mode');
+};
 
 const EMPTY_EMIT = { transcript: 'nothing here', claims: [] };
 
@@ -164,15 +179,18 @@ describe('EXTRACTION_TOOL', () => {
 
 describe('callForcedTool — request body', () => {
   it('sends no sampling parameters, no prefill, and strict only on the tool', async () => {
-    const { client, calls } = recorder([message([toolUse(EMPTY_EMIT)], 'tool_use')]);
+    const { transport, calls } = recorder([message([toolUse(EMPTY_EMIT)], 'tool_use')]);
 
-    await callForcedTool(client, {
-      model: MODELS.sonnet,
-      system: 'system prefix',
-      content: [{ type: 'text', text: 'go' }],
-      tool: EXTRACTION_TOOL,
-      effort: 'low',
-    });
+    await callForcedTool(
+      {
+        model: MODELS.sonnet,
+        system: 'system prefix',
+        content: [{ type: 'text', text: 'go' }],
+        tool: EXTRACTION_TOOL,
+        effort: 'low',
+      },
+      liveOpts(transport),
+    );
 
     const [request] = calls;
     if (request === undefined) throw new Error('no request was recorded');
@@ -209,15 +227,18 @@ describe('callForcedTool — request body', () => {
   });
 
   it('caches the stable system prefix and puts a per-attempt suffix after it', async () => {
-    const { client, calls } = recorder([message([toolUse(EMPTY_EMIT)], 'tool_use')]);
+    const { transport, calls } = recorder([message([toolUse(EMPTY_EMIT)], 'tool_use')]);
 
-    await callForcedTool(client, {
-      model: MODELS.sonnet,
-      system: 'stable prefix',
-      systemSuffix: 'per-attempt addendum',
-      content: [{ type: 'text', text: 'go' }],
-      tool: EXTRACTION_TOOL,
-    });
+    await callForcedTool(
+      {
+        model: MODELS.sonnet,
+        system: 'stable prefix',
+        systemSuffix: 'per-attempt addendum',
+        content: [{ type: 'text', text: 'go' }],
+        tool: EXTRACTION_TOOL,
+      },
+      liveOpts(transport),
+    );
 
     const system = calls[0]?.system;
     expect(Array.isArray(system)).toBe(true);
@@ -234,29 +255,73 @@ describe('callForcedTool — request body', () => {
 
   it('checks stop_reason for refusal BEFORE touching content', async () => {
     // A refusal carries no content; indexing into it first is the bug.
-    const { client } = recorder([message([], 'refusal')]);
+    const { transport } = recorder([message([], 'refusal')]);
     await expect(
-      callForcedTool(client, {
-        model: MODELS.sonnet,
-        system: 's',
-        content: [{ type: 'text', text: 'go' }],
-        tool: EXTRACTION_TOOL,
-      }),
+      callForcedTool(
+        {
+          model: MODELS.sonnet,
+          system: 's',
+          content: [{ type: 'text', text: 'go' }],
+          tool: EXTRACTION_TOOL,
+        },
+        liveOpts(transport),
+      ),
     ).rejects.toThrow(ToolCallFailedError);
   });
 
   it('fails loudly when the turn stopped before any tool_use block', async () => {
-    const { client } = recorder([
+    const { transport } = recorder([
       message([{ type: 'text', text: 'partial…', citations: null }], 'max_tokens'),
     ]);
     await expect(
-      callForcedTool(client, {
+      callForcedTool(
+        {
+          model: MODELS.sonnet,
+          system: 's',
+          content: [{ type: 'text', text: 'go' }],
+          tool: EXTRACTION_TOOL,
+        },
+        liveOpts(transport),
+      ),
+    ).rejects.toThrow(/max_tokens/);
+  });
+
+  it('the captured request is exactly what gets hashed', async () => {
+    const { transport, calls } = recorder([message([toolUse(EMPTY_EMIT)], 'tool_use')]);
+
+    const outcome = await callForcedTool(
+      {
         model: MODELS.sonnet,
-        system: 's',
+        system: 'system prefix',
         content: [{ type: 'text', text: 'go' }],
         tool: EXTRACTION_TOOL,
-      }),
-    ).rejects.toThrow(/max_tokens/);
+        effort: 'low',
+      },
+      liveOpts(transport),
+    );
+
+    const [request] = calls;
+    if (request === undefined) throw new Error('no request was recorded');
+    if (outcome.kind !== 'ok') throw new Error('expected an ok outcome');
+    expect(outcome.hash).toBe(requestHash(request));
+  });
+
+  it('calling with mode: "fixtures" never invokes the transport at all', async () => {
+    const outcome = await callForcedTool(
+      {
+        model: MODELS.sonnet,
+        system: 'system prefix',
+        content: [{ type: 'text', text: 'go' }],
+        tool: EXTRACTION_TOOL,
+        effort: 'low',
+      },
+      { mode: 'fixtures', transport: throwingTransport, store: createInMemoryFixtureStore() },
+    );
+
+    // No fixture was ever recorded for this request, and the throwing
+    // transport was never reached (it would have thrown out of the await
+    // above if it had been) — a miss, not a crash.
+    expect(outcome).toEqual({ kind: 'miss', degraded: false, hash: outcome.hash });
   });
 });
 
@@ -313,18 +378,19 @@ describe('extractSourceLive — retry', () => {
   const ALL_FABRICATED = { transcript: TRANSCRIPT, claims: [fabricated, alsoFabricated] };
 
   it('retries once when every quote failed verification', async () => {
-    const { client, calls } = recorder([
+    const { transport, calls } = recorder([
       message([toolUse(ALL_FABRICATED)], 'tool_use'),
       message([toolUse(GOOD)], 'tool_use'),
     ]);
 
-    const report = await extractSourceLive(client, source, input);
+    const report = await extractSourceLive(source, input, liveOpts(transport));
 
     expect(calls).toHaveLength(2);
     expect(report.retried).toBe(true);
     expect(report.kept).toHaveLength(2);
     expect(report.dropped).toHaveLength(0);
     expect(report.notice).toBeNull();
+    expect(report.degraded).toBe(false);
     // The retry is the contrast-boosted variant, sent as a system suffix.
     const secondSystem = calls[1]?.system;
     expect(Array.isArray(secondSystem) ? secondSystem.length : 0).toBe(2);
@@ -335,12 +401,12 @@ describe('extractSourceLive — retry', () => {
     // pass: nothing verified. Overwriting unconditionally would lose the one
     // good claim — a manufactured missing claim.
     const half = { transcript: TRANSCRIPT, claims: [verifiable, fabricated] };
-    const { client } = recorder([
+    const { transport } = recorder([
       message([toolUse(half)], 'tool_use'),
       message([toolUse(ALL_FABRICATED)], 'tool_use'),
     ]);
 
-    const report = await extractSourceLive(client, source, input);
+    const report = await extractSourceLive(source, input, liveOpts(transport));
 
     expect(report.retried).toBe(true);
     expect(report.kept).toHaveLength(1);
@@ -348,12 +414,12 @@ describe('extractSourceLive — retry', () => {
   });
 
   it('never silently returns nothing: a still-bad source carries an honest notice', async () => {
-    const { client } = recorder([
+    const { transport } = recorder([
       message([toolUse(ALL_FABRICATED)], 'tool_use'),
       message([toolUse(ALL_FABRICATED)], 'tool_use'),
     ]);
 
-    const report = await extractSourceLive(client, source, input);
+    const report = await extractSourceLive(source, input, liveOpts(transport));
 
     expect(report.kept).toHaveLength(0);
     expect(report.notice).not.toBeNull();
