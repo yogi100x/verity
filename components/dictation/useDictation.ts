@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { Source } from "@/lib/contracts";
 import type { Mode } from "@/lib/modes";
+import { ensureAnonSession } from "@/components/data/supabaseBrowser";
 
 export type DictationErrorKind = "unsupported" | "denied" | "failed";
 
@@ -159,6 +160,17 @@ export function useDictation({ personId, title, mode, onSaved }: UseDictationOpt
 
     if (!mountedRef.current) return;
     setState({ status: "uploading" });
+
+    // The upload route now requires a held Supabase session (401 without
+    // one, see components/data/careAccess.ts) — establish/reuse it before
+    // the network call. A false result reuses the same honest "failed"
+    // state as any other upload failure; the copy comes from
+    // lib/copy/dictation via the caller, not re-typed here.
+    const signedIn = await ensureAnonSession();
+    if (!signedIn) {
+      if (mountedRef.current) setState({ status: "error", kind: "failed" });
+      return;
+    }
 
     const extension = mimeType?.includes("mp4") ? "m4a" : "webm";
     const formData = new FormData();

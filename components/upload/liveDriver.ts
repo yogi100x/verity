@@ -25,6 +25,7 @@
 
 import { z } from "zod";
 import { STAGE_LABELS, type UploadDriver } from "@/components/upload/useUploadSimulation";
+import { ensureAnonSession } from "@/components/data/supabaseBrowser";
 
 const WireReport = z.object({
   claims: z.array(z.unknown()).optional(),
@@ -69,6 +70,22 @@ function firstNoticeText(...values: Array<string | null | undefined>): string | 
 export function createLiveDriver(personId: string): UploadDriver {
   return async (file, report) => {
     report({ stage: "reading", statusLabel: STAGE_LABELS.reading(file.name) });
+
+    // A live upload needs a held Supabase session — /api/extract?mode=live
+    // 401s without one and 403s without a care_relationships grant for it
+    // (see components/data/careAccess.ts). Establishing/reusing the session
+    // is the browser's job, done here rather than left to the fetch to fail
+    // on; a false result means no session could be created, so nothing is
+    // posted and nothing is silently lost.
+    const signedIn = await ensureAnonSession();
+    if (!signedIn) {
+      report({
+        stage: "failed",
+        statusLabel: STAGE_LABELS.failed,
+        partialNote: "Could not sign in. Nothing was saved.",
+      });
+      return;
+    }
 
     const formData = new FormData();
     formData.append("file", file);

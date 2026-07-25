@@ -29,6 +29,7 @@ import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { detectAudioMediaType } from '@/lib/ai/audio';
 import { resolveMode } from '@/lib/modes';
+import { checkCareAccess } from '@/components/data/careAccess';
 import { Source } from '@/lib/contracts';
 import {
   ALLOWED_AUDIO_MIME_TYPES,
@@ -159,6 +160,32 @@ export async function POST(request: Request): Promise<Response> {
       source,
       notice: `${mode} mode: the recording was not stored because the app is running from fixtures.`,
     });
+  }
+
+  // IDOR guard: a caller could otherwise write a voice Source into any
+  // person's record by supplying that person_id. This must run before the
+  // storage-config check / client creation / any write — fixtures/replay
+  // above never reach here and so never demand a session.
+  const access = await checkCareAccess(personId);
+  switch (access.kind) {
+    case 'granted':
+      break;
+    case 'unconfigured':
+      return errorResponse(500, 'Access checks are not configured. Nothing was saved.');
+    case 'no_session':
+      return errorResponse(401, 'Sign-in required. Nothing was saved.');
+    case 'no_access':
+      return errorResponse(403, 'This account does not have access to this care record. Nothing was saved.');
+    default: {
+      // Fail closed. Every deny verdict is handled above and 'granted' is the
+      // ONLY branch that falls through to the write; a kind outside the frozen
+      // union — a future addition, or a malformed runtime value — must deny,
+      // never proceed. The `never` binding also turns an unhandled future kind
+      // into a compile error, so this guard cannot silently drift out of date.
+      const _exhaustive: never = access;
+      void _exhaustive;
+      return errorResponse(403, 'This account does not have access to this care record. Nothing was saved.');
+    }
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

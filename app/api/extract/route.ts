@@ -15,17 +15,19 @@
  * read the result.
  *
  * LIVE PERSISTENCE. After a successful live extraction this route also
- * writes the original bytes, a `sources` row, the kept claims and the facts
- * `reconcile` derives from them — same service-role pattern as
- * `app/api/voice/upload/route.ts` (createClient with
- * `persistSession: false`, storage upload, then a table insert, best-effort
- * cleanup on failure, never a fake success).
+ * writes the original bytes, a `sources` row, the kept claims, any
+ * `claim_conflicts` `reconcile` detects among them, and the facts `reconcile`
+ * derives — same service-role pattern as `app/api/voice/upload/route.ts`
+ * (createClient with `persistSession: false`, storage upload, then table
+ * inserts, best-effort cleanup on failure, never a fake success). Insert
+ * order is claims -> claim_conflicts -> facts, since a fact's `conflict_id`
+ * points at a conflict row.
  *
  * Response shape stays byte-for-byte identical in fixtures/replay mode — the
  * branch below is untouched. Live mode gains exactly two ADDITIVE top-level
  * fields:
- *   - `persisted`: `{ source_id, claims, facts }` on a successful write, or
- *     `null` when nothing was stored.
+ *   - `persisted`: `{ source_id, claims, facts, conflicts }` on a successful
+ *     write, or `null` when nothing was stored.
  *   - `persist_notice`: present ONLY when `persisted` is `null`, explaining
  *     why in the same honest-degrade style as the rest of this route. Never
  *     present on success, never present outside live mode.
@@ -35,7 +37,12 @@
  * fixtures/replay mode (byte-for-byte unchanged behaviour). In live mode it
  * is required — validated before the model is ever called, mirroring the
  * voice upload route's validation-first order, so a request that cannot be
- * persisted never burns an Anthropic call.
+ * persisted never burns an Anthropic call. Once syntactically valid, it is
+ * also authorization-checked via `checkCareAccess` (`@/components/data/careAccess`)
+ * BEFORE extraction runs, so an unauthorized caller never burns a model call
+ * either — an IDOR otherwise let any caller write into any person's record by
+ * supplying that person's id. Every access-denial response is a fixed string;
+ * none ever echoes person_id or a user id back to the caller.
  */
 
 import { randomUUID } from 'crypto';
@@ -53,7 +60,8 @@ import {
 } from '@/lib/ai/documents';
 import { reconcile } from '@/lib/ai/reconcile';
 import { DOCUMENTS_BUCKET } from '@/lib/ai/storage';
-import { Source, type Claim, type Fact, type SourceKind } from '@/lib/contracts';
+import { Source, type Claim, type Conflict, type Fact, type SourceKind } from '@/lib/contracts';
+import { checkCareAccess } from '@/components/data/careAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +73,7 @@ export const dynamic = 'force-dynamic';
 type SourceRow = Source;
 type ClaimRow = Claim & { readonly person_id: string };
 type FactRow = Fact;
+type ConflictRow = Conflict;
 
 const PersonId = z.string().uuid();
 
@@ -96,7 +105,7 @@ function extensionAndContentType(input: SourceInput): { readonly ext: string; re
 }
 
 type PersistOutcome =
-  | { readonly stored: true; readonly claims: number; readonly facts: number }
+  | { readonly stored: true; readonly claims: number; readonly facts: number; readonly conflicts: number }
   | { readonly stored: false; readonly notice: string };
 
 /** Best-effort delete of a `sources` row (cascades to its `claims`), used
@@ -109,6 +118,31 @@ async function deleteSourceBestEffort(client: SupabaseClient, sourceId: string):
     if (error) console.error('POST /api/extract: source cleanup delete failed', error);
   } catch (err) {
     console.error('POST /api/extract: source cleanup delete threw', err);
+  }
+}
+
+/** Best-effort removal of the storage blob a later persistence step orphaned.
+ *  Never throws, same rationale as `deleteSourceBestEffort`. */
+async function removeBlobBestEffort(client: SupabaseClient, storagePath: string): Promise<void> {
+  try {
+    const { error } = await client.storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
+    if (error) console.error('POST /api/extract: orphan blob cleanup failed', error);
+  } catch (err) {
+    console.error('POST /api/extract: orphan blob cleanup threw', err);
+  }
+}
+
+/** Best-effort delete of the `claim_conflicts` rows just written, used when a
+ *  later step (the `facts` insert, which references these ids) fails.
+ *  `claim_conflicts` references `people`, not `sources` — deleting the
+ *  source row does NOT cascade to these, so they need their own cleanup.
+ *  Never throws, same rationale as `deleteSourceBestEffort`. */
+async function deleteConflictsBestEffort(client: SupabaseClient, conflictIds: readonly string[]): Promise<void> {
+  try {
+    const { error } = await client.from('claim_conflicts').delete().in('id', conflictIds);
+    if (error) console.error('POST /api/extract: claim_conflicts cleanup delete failed', error);
+  } catch (err) {
+    console.error('POST /api/extract: claim_conflicts cleanup delete threw', err);
   }
 }
 
@@ -182,11 +216,7 @@ async function persistLiveExtraction(params: {
 
   if (sourceError || sourceData === null || sourceData === undefined) {
     console.error('POST /api/extract: sources insert failed', sourceError);
-    try {
-      await client.storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
-    } catch (cleanupErr) {
-      console.error('POST /api/extract: orphan blob cleanup failed', cleanupErr);
-    }
+    await removeBlobBestEffort(client, storagePath);
     return { stored: false, notice: 'Extraction succeeded but was not stored: the source record could not be saved.' };
   }
 
@@ -218,13 +248,34 @@ async function persistLiveExtraction(params: {
     }
   }
 
-  // Derive facts from exactly the claims just persisted, for this one
-  // source. `sourcesById` needs only this source's own kind/title —
+  // Derive facts AND conflicts from exactly the claims just persisted, for
+  // this one source, from the SAME `reconcile` call — `Conflict.id` and every
+  // `Fact.conflict_id` pointing at it are minted fresh per call, so calling
+  // `reconcile` twice would produce facts that cite conflict ids that were
+  // never inserted. `sourcesById` needs only this source's own kind/title —
   // `classifySource` (via `buildFacts`) reads them to decide instruction vs
   // observation.
-  const { facts } = reconcile(report.kept, personId, {
+  const { facts, conflicts } = reconcile(report.kept, personId, {
     sourcesById: new Map([[sourceId, { kind, title }]]),
   });
+
+  // Conflict rows must exist before the facts that reference them via
+  // `conflict_id` — that FK is unenforced in the DB (see the module doc
+  // comment) but the insert order still matters for a caller that reads facts
+  // and conflicts together expecting the conflict to already be there.
+  const conflictsPayload: ConflictRow[] = conflicts.map((conflict) => ({ ...conflict }));
+  if (conflictsPayload.length > 0) {
+    const { error: conflictsError } = await client
+      .from('claim_conflicts')
+      .upsert(conflictsPayload, { onConflict: 'id' });
+
+    if (conflictsError) {
+      console.error('POST /api/extract: claim_conflicts upsert failed', conflictsError);
+      await deleteSourceBestEffort(client, sourceId);
+      await removeBlobBestEffort(client, storagePath);
+      return { stored: false, notice: 'Extraction succeeded but was not stored: the detected conflicts could not be saved.' };
+    }
+  }
 
   // `fact_needs_support` (migration 0001): a fact may only lack supporting
   // claims when status is 'unknown'. `buildFacts` never emits 'unknown', so
@@ -251,12 +302,24 @@ async function persistLiveExtraction(params: {
 
     if (factsError) {
       console.error('POST /api/extract: facts insert failed', factsError);
+      // `claim_conflicts` does not cascade off `sources` (it references
+      // `people`), so the rows just upserted above would otherwise survive
+      // this source's deletion as orphans referenced by nothing.
+      if (conflictsPayload.length > 0) {
+        await deleteConflictsBestEffort(client, conflictsPayload.map((c) => c.id));
+      }
       await deleteSourceBestEffort(client, sourceId);
+      await removeBlobBestEffort(client, storagePath);
       return { stored: false, notice: 'Extraction succeeded but was not stored: the derived facts could not be saved.' };
     }
   }
 
-  return { stored: true, claims: report.kept.length, facts: validFacts.length };
+  return {
+    stored: true,
+    claims: report.kept.length,
+    facts: validFacts.length,
+    conflicts: conflictsPayload.length,
+  };
 }
 
 function json(body: unknown, status = 200): Response {
@@ -368,6 +431,34 @@ export async function POST(request: Request): Promise<Response> {
     // check, and re-parsing a UUID is not worth a non-null assertion.
     const personId = PersonId.parse(form.get('person_id'));
 
+    // Authorization, before any model spend: a caller who supplied a
+    // syntactically-valid person_id they have no access to must be stopped
+    // here, not after an Anthropic call has already been billed. Fixed
+    // strings only in every branch below — never echo person_id or a user id
+    // back to the caller.
+    const access = await checkCareAccess(personId);
+    switch (access.kind) {
+      case 'granted':
+        break;
+      case 'unconfigured':
+        return errorResponse(500, 'Access checks are not configured. Nothing was saved.');
+      case 'no_session':
+        return errorResponse(401, 'Sign-in required. Nothing was saved.');
+      case 'no_access':
+        return errorResponse(403, 'This account does not have access to this care record. Nothing was saved.');
+      default: {
+        // Fail closed. Every deny verdict is handled above and 'granted' is the
+        // ONLY branch that falls through to extraction + the write; a kind
+        // outside the frozen union — a future addition, or a malformed runtime
+        // value — must deny, never proceed. The `never` binding also turns an
+        // unhandled future kind into a compile error, so this guard cannot
+        // silently drift out of date. Mirrors app/api/voice/upload/route.ts.
+        const _exhaustive: never = access;
+        void _exhaustive;
+        return errorResponse(403, 'This account does not have access to this care record. Nothing was saved.');
+      }
+    }
+
     const sourceId = randomUUID();
 
     // `callModel` (via `extractSourceLive` -> `callForcedTool`) handles a
@@ -395,7 +486,12 @@ export async function POST(request: Request): Promise<Response> {
         mode,
         reports: [toWireReport(report)],
         drops: report.stats.claims_dropped,
-        persisted: { source_id: sourceId, claims: persisted.claims, facts: persisted.facts },
+        persisted: {
+          source_id: sourceId,
+          claims: persisted.claims,
+          facts: persisted.facts,
+          conflicts: persisted.conflicts,
+        },
       });
     }
 

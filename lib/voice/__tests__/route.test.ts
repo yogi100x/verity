@@ -12,9 +12,13 @@ vi.mock('@supabase/supabase-js', () => ({ createClient }));
 const { resolveMode } = vi.hoisted(() => ({ resolveMode: vi.fn() }));
 vi.mock('@/lib/modes', () => ({ resolveMode }));
 
+const { checkCareAccess } = vi.hoisted(() => ({ checkCareAccess: vi.fn() }));
+vi.mock('@/components/data/careAccess', () => ({ checkCareAccess }));
+
 import { POST } from '@/app/api/voice/upload/route';
 
 const PERSON_ID = '11111111-1111-1111-1111-111111111111';
+const MEMBER_ID = '33333333-3333-3333-3333-333333333333';
 
 /**
  * Build a binary-safe multipart/form-data body, replicated locally rather
@@ -132,6 +136,10 @@ describe('POST /api/voice/upload', () => {
   beforeEach(() => {
     createClient.mockReset();
     resolveMode.mockReset();
+    checkCareAccess.mockReset();
+    // Default: granted, so every existing live-mode test (written before the
+    // auth check existed) keeps passing unchanged.
+    checkCareAccess.mockResolvedValue({ kind: 'granted', memberId: MEMBER_ID });
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
@@ -164,6 +172,8 @@ describe('POST /api/voice/upload', () => {
     expect(typeof body.source.storage_path).toBe('string');
     expect(() => Source.parse(body.source)).not.toThrow();
     expect(createClient).not.toHaveBeenCalled();
+    // fixtures mode demands no session: the auth check is never reached.
+    expect(checkCareAccess).not.toHaveBeenCalled();
   });
 
   it('replay mode: also 200, also never calls createClient', async () => {
@@ -178,6 +188,7 @@ describe('POST /api/voice/upload', () => {
     const body = await res.json();
     expect(body.mode).toBe('replay');
     expect(createClient).not.toHaveBeenCalled();
+    expect(checkCareAccess).not.toHaveBeenCalled();
   });
 
   it('live mode: uploads to storage bucket "audio", inserts into "sources", and returns the row', async () => {
@@ -430,5 +441,111 @@ describe('POST /api/voice/upload', () => {
     // The row was inserted, so the blob must be LEFT in place (removing it
     // would orphan the row) — cleanup runs only on insert failure.
     expect(remove).not.toHaveBeenCalled();
+  });
+
+  describe('live mode: care-access authorization (IDOR guard)', () => {
+    it('no_session -> 401, exact body, no writes', async () => {
+      resolveMode.mockReturnValue('live');
+      checkCareAccess.mockResolvedValue({ kind: 'no_session' });
+      const { upload, insert } = installLiveClient();
+
+      const res = await POST(
+        multipartRequest('http://localhost/api/voice/upload', [
+          audioField(webmBytes(), 'audio/webm'),
+          { name: 'person_id', data: PERSON_ID },
+        ]),
+      );
+
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body).toEqual({ error: 'Sign-in required. Nothing was saved.' });
+      expect(upload).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+      // Auth runs before the storage client is even constructed: a regression
+      // that moved the check below createClient would trip this.
+      expect(createClient).not.toHaveBeenCalled();
+    });
+
+    it('no_access -> 403, exact body, no writes', async () => {
+      resolveMode.mockReturnValue('live');
+      checkCareAccess.mockResolvedValue({ kind: 'no_access' });
+      const { upload, insert } = installLiveClient();
+
+      const res = await POST(
+        multipartRequest('http://localhost/api/voice/upload', [
+          audioField(webmBytes(), 'audio/webm'),
+          { name: 'person_id', data: PERSON_ID },
+        ]),
+      );
+
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body).toEqual({
+        error: 'This account does not have access to this care record. Nothing was saved.',
+      });
+      expect(upload).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+      expect(createClient).not.toHaveBeenCalled();
+    });
+
+    it('unconfigured -> 500, exact body, no writes', async () => {
+      resolveMode.mockReturnValue('live');
+      checkCareAccess.mockResolvedValue({ kind: 'unconfigured' });
+      const { upload, insert } = installLiveClient();
+
+      const res = await POST(
+        multipartRequest('http://localhost/api/voice/upload', [
+          audioField(webmBytes(), 'audio/webm'),
+          { name: 'person_id', data: PERSON_ID },
+        ]),
+      );
+
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body).toEqual({ error: 'Access checks are not configured. Nothing was saved.' });
+      expect(upload).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+      expect(createClient).not.toHaveBeenCalled();
+    });
+
+    it('fail closed: a verdict outside the frozen union denies (403) and writes nothing', async () => {
+      resolveMode.mockReturnValue('live');
+      // Simulate a future/malformed verdict kind reaching the route at runtime.
+      // The switch default must DENY, never fall through to the write.
+      checkCareAccess.mockResolvedValue({ kind: 'some_future_kind' });
+      const { upload, insert } = installLiveClient();
+
+      const res = await POST(
+        multipartRequest('http://localhost/api/voice/upload', [
+          audioField(webmBytes(), 'audio/webm'),
+          { name: 'person_id', data: PERSON_ID },
+        ]),
+      );
+
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body).toEqual({
+        error: 'This account does not have access to this care record. Nothing was saved.',
+      });
+      expect(upload).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+      expect(createClient).not.toHaveBeenCalled();
+    });
+
+    it('granted -> happy-path write still succeeds, and checkCareAccess is called with the form\'s person_id', async () => {
+      resolveMode.mockReturnValue('live');
+      checkCareAccess.mockResolvedValue({ kind: 'granted', memberId: MEMBER_ID });
+      installLiveClient();
+
+      const res = await POST(
+        multipartRequest('http://localhost/api/voice/upload', [
+          audioField(webmBytes(), 'audio/webm'),
+          { name: 'person_id', data: PERSON_ID },
+        ]),
+      );
+
+      expect(res.status).toBe(200);
+      expect(checkCareAccess).toHaveBeenCalledWith(PERSON_ID);
+    });
   });
 });
