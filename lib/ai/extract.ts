@@ -169,15 +169,28 @@ function locateQuote(
 
 /* ============================ partitioning ============================ */
 
-/** Split raw claims into verified Claims and dropped ones. Pure; no network. */
+/**
+ * Split raw claims into verified Claims and dropped ones. Pure; no network.
+ *
+ * `existingIds` is index-aligned with `raw` and supplies a claim's ALREADY
+ * ESTABLISHED id. Live extraction passes nothing — a claim the model has just
+ * emitted has no prior identity, so a fresh uuid is correct. Replaying a known
+ * case (see `extractFromFixtures`) passes the ids that case's own Facts,
+ * Conflicts and Gaps already reference; minting fresh ones there breaks every
+ * one of those references silently.
+ *
+ * Verification is re-derived either way. A preserved id changes a claim's
+ * identity, never whether it passed.
+ */
 export function partitionClaims(
   raw: readonly RawClaim[],
   source: Pick<Source, 'id' | 'transcript'>,
+  existingIds?: readonly (string | undefined)[],
 ): { kept: Claim[]; dropped: DroppedClaim[] } {
   const kept: Claim[] = [];
   const dropped: DroppedClaim[] = [];
 
-  for (const rawClaim of raw) {
+  for (const [index, rawClaim] of raw.entries()) {
     if (!verifyClaim({ quote: rawClaim.quote }, source)) {
       dropped.push({ claim: rawClaim, reason: 'quote_not_in_source' });
       continue;
@@ -186,7 +199,7 @@ export function partitionClaims(
     const located = locateQuote(source.transcript, rawClaim.quote);
 
     const claim: Claim = {
-      id: randomUUID(),
+      id: existingIds?.[index] ?? randomUUID(),
       source_id: source.id,
       ontology_key: rawClaim.ontology_key,
       subject: rawClaim.subject,
@@ -315,34 +328,56 @@ export async function extractSourceLive(
 
 /* ============================ fixtures mode ============================ */
 
-/** Build reports from fixtures/margaret.json. No network, no API key. */
+/**
+ * Build reports from fixtures/margaret.json. No network, no API key.
+ *
+ * This REPLAYS a known case, so claim ids are preserved, not regenerated. The
+ * fixture's `facts.supporting_claim_ids`, `conflicts.claim_ids` and
+ * `gaps.supporting_claim_ids` all reference the fixture's own claim ids; a
+ * fresh uuid per call would leave every one of those references dangling, and
+ * anything reading them (supersession, artefact citation) would silently see
+ * nothing rather than fail loudly.
+ *
+ * Fresh ids remain correct for genuine live extraction — see `partitionClaims`.
+ */
 export function extractFromFixtures(): ExtractionReport[] {
   const fixture = CaseSnapshot.parse(fixtureRaw);
 
-  const claimsBySource = new Map<string, RawClaim[]>();
+  interface FixtureRaw {
+    readonly raw: RawClaim;
+    readonly id: string;
+  }
+
+  const claimsBySource = new Map<string, FixtureRaw[]>();
   for (const claim of fixture.claims) {
     const list = claimsBySource.get(claim.source_id) ?? [];
     list.push({
-      ontology_key: claim.ontology_key,
-      subject: claim.subject,
-      value: claim.value,
-      quote: claim.quote,
-      page: claim.locator.page,
-      asserted_at: claim.asserted_at,
-      date_precision: claim.date_precision,
+      id: claim.id,
+      raw: {
+        ontology_key: claim.ontology_key,
+        subject: claim.subject,
+        value: claim.value,
+        quote: claim.quote,
+        page: claim.locator.page,
+        asserted_at: claim.asserted_at,
+        date_precision: claim.date_precision,
+      },
     });
     claimsBySource.set(claim.source_id, list);
   }
 
   return fixture.sources.map((source) => {
-    const raw = claimsBySource.get(source.id) ?? [];
+    const entries = claimsBySource.get(source.id) ?? [];
+    const raw = entries.map((entry) => entry.raw);
     // Re-derive verification from the real transcript and verifyClaim rather
     // than trusting the fixture's own `verified_substring` flag, so
-    // /api/debug/inspect shows a genuine pass/fail with no API key.
-    const { kept, dropped } = partitionClaims(raw, {
-      id: source.id,
-      transcript: source.transcript,
-    });
+    // /api/debug/inspect shows a genuine pass/fail with no API key. Only the
+    // id is taken from the fixture.
+    const { kept, dropped } = partitionClaims(
+      raw,
+      { id: source.id, transcript: source.transcript },
+      entries.map((entry) => entry.id),
+    );
 
     return {
       source: { id: source.id, title: source.title, kind: source.kind },
