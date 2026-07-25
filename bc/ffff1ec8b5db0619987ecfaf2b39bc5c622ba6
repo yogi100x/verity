@@ -1,0 +1,114 @@
+components/dictation/useDictation.ts
+  s_afabf214a6fe93::t_3dbb3f6ebbbc88 24
+  s_afabf214a6fe93::t_a2026813f9ab8a 164-174
+app/demo/_lib/__tests__/routes.test.ts
+  s_afabf214a6fe93::t_df0a26ae97b9eb 25-28
+  s_afabf214a6fe93::t_7093a77209ac64 171-177,184
+  s_afabf214a6fe93::t_5878fd8e3196f7 249-257
+  s_afabf214a6fe93::t_9f9e060f632150 14-19
+  s_afabf214a6fe93::t_ef763375bc0f90 167-170,178-183,185-248,258-282
+components/data/__tests__/supabase-browser.test.ts
+  s_afabf214a6fe93::t_d046a2fa5d9380 68-91
+  s_afabf214a6fe93::t_0f074cc2c9bc15 1-67,92-104
+components/upload/__tests__/live-driver.test.ts
+  s_afabf214a6fe93::t_4a820d32032b1d 233-268
+  s_afabf214a6fe93::t_cddb01ab4146d6 45-48
+  s_afabf214a6fe93::t_e40c95f099d7b3 16-19,26-30
+  s_afabf214a6fe93::t_74085d9c1ce661 31
+lib/ai/__tests__/extract-persistence.test.ts
+  s_afabf214a6fe93::t_81d9079deb49f8 285
+  s_afabf214a6fe93::t_c748e7f4721643 475-479,484
+  s_afabf214a6fe93::t_2809fd5407b664 527-535,539-541
+  s_afabf214a6fe93::t_af8ff9a1ab9ad4 403-405,410-411
+  s_afabf214a6fe93::t_399cde3269ce6d 601-640
+  s_afabf214a6fe93::t_acd453bfd589e8 276
+  s_afabf214a6fe93::t_25d2632d83eefa 355-358
+  s_afabf214a6fe93::t_01e97b3d803e6f 546-548,551
+  s_afabf214a6fe93::t_5231a96cfa1cdc 545
+  s_afabf214a6fe93::t_ef3f3748289c43 193-201,207
+  s_afabf214a6fe93::t_80e24fdc92ff3e 18-25
+  s_afabf214a6fe93::t_2659b137e4d07f 774
+  s_afabf214a6fe93::t_c0d299715dc26f 46-51
+  s_afabf214a6fe93::t_a622ab791d625e 3
+  s_afabf214a6fe93::t_f0220afb41f696 486,641-673,675-694
+  s_afabf214a6fe93::t_5bb46c27f884da 485,488-520,523-524,526,536-538,542-544,549-550,552-600
+  s_afabf214a6fe93::t_fcb4a61d59e9d8 844-847
+  s_afabf214a6fe93::t_af22ab051aaf80 208,210-275
+  s_afabf214a6fe93::t_e933593229cb48 317,322-324,329,335-348
+  s_afabf214a6fe93::t_67c6bc38385081 371-372
+  s_afabf214a6fe93::t_d00f5297e8008b 521-522,525
+  s_afabf214a6fe93::t_e92e6623a1cb8c 209
+  s_afabf214a6fe93::t_76a6f243671d1c 487
+components/upload/__tests__/upload.test.tsx
+  s_afabf214a6fe93::t_4db4d037b0f7aa 68-69
+  s_afabf214a6fe93::t_5ce9d0220be5d7 185-198
+  s_afabf214a6fe93::t_cc070cd7245a89 33-40
+lib/voice/__tests__/route.test.ts
+  s_afabf214a6fe93::t_78ef39d3961a14 508-532
+  s_afabf214a6fe93::t_8828e437c3b33b 175-176,191
+  s_afabf214a6fe93::t_b1de831e7965ae 139-142
+  s_afabf214a6fe93::t_000e09eb0be823 15-17,21
+  s_afabf214a6fe93::t_6b997df42f4d21 464-466
+  s_afabf214a6fe93::t_3d6684403d6f4c 445-463,467-487,489-507,533-550
+  s_afabf214a6fe93::t_9b90c3307e976d 488
+app/demo/_lib/handler.ts
+  s_afabf214a6fe93::t_53b7353c5b1450 10
+  s_afabf214a6fe93::t_1df2491a95fd2a 90-91
+  s_afabf214a6fe93::t_e85325dfda1fdf 30-57
+components/upload/UploadView.tsx
+  s_afabf214a6fe93::t_a9c31616d47519 3
+  s_afabf214a6fe93::t_61cb9abb294f7b 38-52
+  s_afabf214a6fe93::t_00be5e5aaf5540 9
+components/data/careAccess.ts
+  s_afabf214a6fe93::t_094192b1eec67e 1-7,13-35,46-53,58-62,64-80,90,96,108
+  s_afabf214a6fe93::t_783ca183eae0a8 81-89,91-95,97-107
+  s_afabf214a6fe93::t_1dfaede475da6b 8-12,54-57,63,109
+  s_afabf214a6fe93::t_1c7e10620025b6 36-45
+components/dictation/__tests__/mic-button.test.tsx
+  s_afabf214a6fe93::t_aa931b16ac674f 13-16,30-34
+  s_afabf214a6fe93::t_d53100d50fcfe5 285-304
+  s_afabf214a6fe93::t_cb21e1935e3d2e 367-373
+  s_afabf214a6fe93::t_f2747eedb1e72c 126-129
+  s_afabf214a6fe93::t_62e99d16ab84b9 35
+components/upload/liveDriver.ts
+  s_afabf214a6fe93::t_04bd44cd1949a3 28
+  s_afabf214a6fe93::t_c2f79069873bb4 74-89
+components/data/supabaseBrowser.ts
+  s_afabf214a6fe93::t_a871f8f01f5ccf 1-2,33,71
+  s_afabf214a6fe93::t_1a0d44d0e55b67 3-23,34-42,45,69
+  s_afabf214a6fe93::t_58c07e76e0c459 24-32,43-44,46-68,70
+app/api/extract/route.ts
+  s_afabf214a6fe93::t_a4cb3e010cc785 63-64
+  s_afabf214a6fe93::t_c28f960bfc0df9 76
+  s_afabf214a6fe93::t_f3d0ce1a76fb87 440-443,445,447-458
+  s_afabf214a6fe93::t_e843ddd449e8f3 18-24,29-30,40-45
+  s_afabf214a6fe93::t_fc9e1c686d3e18 146,251-255,258,262-279,305-310,312,317-322
+  s_afabf214a6fe93::t_187fd33aa25a8a 434-439,444,446,459-461
+  s_afabf214a6fe93::t_cf037b4bebac1c 108,124-145,147
+  s_afabf214a6fe93::t_be26c27e2da42c 489-494
+  s_afabf214a6fe93::t_7bf34abe5c1430 219
+  s_afabf214a6fe93::t_cca56bea41f1f9 148
+app/api/voice/upload/route.ts
+  s_afabf214a6fe93::t_f1d54a596a35da 32
+  s_afabf214a6fe93::t_44817aba3fff89 170-188
+  s_afabf214a6fe93::t_b964888f0ed72a 165-169,189-190
+components/data/__tests__/care-access.test.ts
+  s_afabf214a6fe93::t_233ae2194d6d6d 117-151
+  s_afabf214a6fe93::t_9b14b0230c7dc6 1-116,152-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "bcffff1ec8b5db0619987ecfaf2b39bc5c622ba6",
+  "prompts": {},
+  "sessions": {
+    "s_afabf214a6fe93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c999a24-05c7-418e-a055-0e42e33d7f6d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    }
+  }
+}
