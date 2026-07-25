@@ -1,0 +1,19 @@
+components/ui/SafetyBanner.tsx
+  s_afabf214a6fe93::t_5dde0c0ab6b7ba 6-8,13-18,26-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "92f445e03cfc01b615b23355577537790c526e30",
+  "prompts": {},
+  "sessions": {
+    "s_afabf214a6fe93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c999a24-05c7-418e-a055-0e42e33d7f6d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    }
+  }
+}
