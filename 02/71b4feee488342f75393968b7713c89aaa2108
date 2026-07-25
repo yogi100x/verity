@@ -1,0 +1,34 @@
+components/letters/LetterModal.tsx
+  s_afabf214a6fe93::t_f07e067acbc1bd 218
+  s_afabf214a6fe93::t_f391fe85d5c361 54-57,60-64
+components/gaps/ClockCard.tsx
+  s_afabf214a6fe93::t_9d2ba9ff58c7fe 58-60
+  s_afabf214a6fe93::t_16598c5960b73c 1-57,61-63
+components/gaps/__tests__/clock-card.test.tsx
+  s_afabf214a6fe93::t_00a624125d9a29 172-185
+  s_afabf214a6fe93::t_0c422d701746bf 148-151,161,168
+  s_afabf214a6fe93::t_d6a0d2fbb3e5b0 1-17,19-22,36-93,99-147,152-160,162-167,169-171
+  s_afabf214a6fe93::t_9ac44083a7234f 18,23-35
+  s_afabf214a6fe93::t_3f458b804eb5c1 94-98
+components/letters/__tests__/letter-modal.test.tsx
+  s_afabf214a6fe93::t_6d1082957c3612 81-91
+app/(app)/gaps/page.tsx
+  s_afabf214a6fe93::t_95497b7f3239a8 4,6,28-38,47-57
+  s_afabf214a6fe93::t_3239dbf6f20a5a 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "0271b4feee488342f75393968b7713c89aaa2108",
+  "prompts": {},
+  "sessions": {
+    "s_afabf214a6fe93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c999a24-05c7-418e-a055-0e42e33d7f6d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    }
+  }
+}
