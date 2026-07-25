@@ -7,8 +7,12 @@ import {
   type RawClaim,
 } from '@/lib/ai/extract';
 import type { InspectReportView } from '@/lib/ai/inspect-html';
-import { Claim } from '@/lib/contracts';
-import fixture from '@/fixtures/margaret.json';
+import { CaseSnapshot, Claim } from '@/lib/contracts';
+import fixtureRaw from '@/fixtures/margaret.json';
+
+// Parsed once: both the report-count assertion and the id-preservation suite
+// read from the same validated snapshot.
+const fixture = CaseSnapshot.parse(fixtureRaw);
 
 const JUDGEMENT_KEY_RE = /severity|urgency|priority|rank|risk|score/i;
 
@@ -192,5 +196,55 @@ describe('toWireReport — what a JSON response is allowed to carry', () => {
     expect(wire.claims).toHaveLength(1);
     expect(wire.claims[0]?.quote).toBe(good.quote);
     expect(wire.claims.every((c) => c.verified_substring)).toBe(true);
+  });
+});
+
+describe('extractFromFixtures preserves the fixture’s own claim ids', () => {
+  const snapshot = CaseSnapshot.parse(fixtureRaw);
+
+  it('every kept claim keeps the id the fixture gave it', () => {
+    const keptIds = extractFromFixtures().flatMap((r) => r.kept.map((c) => c.id));
+    const verifiedFixtureIds = snapshot.claims
+      .filter((c) => c.verified_substring)
+      .map((c) => c.id);
+
+    expect([...keptIds].sort()).toEqual([...verifiedFixtureIds].sort());
+  });
+
+  it('is stable across calls — replaying a known case is not a new case each time', () => {
+    const first = extractFromFixtures().flatMap((r) => r.kept.map((c) => c.id));
+    const second = extractFromFixtures().flatMap((r) => r.kept.map((c) => c.id));
+    expect(second).toEqual(first);
+  });
+
+  it('every id a fixture Fact references still resolves to a kept claim', () => {
+    // This is the assertion whose absence let the bug through: the fixture’s
+    // facts.supporting_claim_ids are the only supersession signal that exists,
+    // and regenerated ids left every one of them dangling silently.
+    const keptIds = new Set(extractFromFixtures().flatMap((r) => r.kept.map((c) => c.id)));
+    const referenced = snapshot.facts.flatMap((f) => f.supporting_claim_ids);
+
+    expect(referenced.length).toBeGreaterThan(0);
+    for (const id of referenced) expect(keptIds.has(id)).toBe(true);
+  });
+
+  it('live extraction still mints a fresh id — there is no prior id to preserve', () => {
+    const source = { id: randomUUID(), transcript: 'furosemide 40mg was stopped' };
+    const raw: RawClaim[] = [
+      {
+        ontology_key: 'medication.furosemide',
+        subject: 'furosemide',
+        value: 'stopped',
+        quote: 'furosemide 40mg was stopped',
+        page: 1,
+        asserted_at: null,
+        date_precision: 'unknown',
+      },
+    ];
+
+    const a = partitionClaims(raw, source).kept[0];
+    const b = partitionClaims(raw, source).kept[0];
+    expect(a?.id).toBeDefined();
+    expect(a?.id).not.toBe(b?.id);
   });
 });
