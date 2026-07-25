@@ -377,6 +377,7 @@ function artifactsFor(
   createdAt: string,
   person: { readonly display_name: string },
   assembledOn: string,
+  sources: readonly Pick<Source, 'title'>[],
 ): InspectArtifactView[] {
   // `quote` is required alongside `verified_substring` now: `citedSpansFor`
   // (lib/ai/artifacts.ts) needs the verbatim quote behind a fact's supporting
@@ -401,6 +402,7 @@ function artifactsFor(
       createdAt,
       person,
       assembledOn,
+      sources,
     });
     return artifactViewFor(
       template,
@@ -462,18 +464,21 @@ export async function GET(request: Request): Promise<Response> {
     // does not carry (it is a `Pick<Source, 'id'|'title'|'kind'>`).
     const gaps = detectGaps(rawFacts, fixture.sources, now);
 
-    // Four ontology namespaces the templates declare but no Fact producer
-    // fills (`conflict.*`, `gap.*`, `source.inventory`, `person.identity`)
-    // are projected into ordinary Facts here and concatenated with the
-    // reconciled set below — slot resolution needs no special case for them.
-    // `fixture.person.display_name` is a stand-in until a person registry
-    // exists, the same as `fixture.person.id` elsewhere in this route.
+    // Two ontology namespaces the templates declare but no Fact producer
+    // fills (`conflict.*`, `gap.*`) are projected into ordinary Facts here
+    // and concatenated with the reconciled set below — slot resolution needs
+    // no special case for them. `source.inventory` and `person.identity` are
+    // NOT projected as facts (see the header of lib/ai/projections.ts): the
+    // pack's own document list and the person's name are metadata about the
+    // pack, not a claim about the person, and are filled via
+    // `BuildArtifactInput.sources` / `.person` on the structural/metadata
+    // path in `buildArtifact` instead. `fixture.person.display_name` /
+    // `fixture.sources` are stand-ins until a person/source registry exists,
+    // the same as `fixture.person.id` elsewhere in this route.
     const projected = projectAll({
       personId: fixture.person.id,
-      person: { display_name: fixture.person.display_name },
       conflicts: rawConflicts,
       gaps,
-      sources: fixture.sources,
     });
 
     const artifacts = artifactsFor(
@@ -485,6 +490,7 @@ export async function GET(request: Request): Promise<Response> {
       createdAt,
       { display_name: fixture.person.display_name },
       assembledOn,
+      fixture.sources,
     );
     return html(renderInspectPage(reports, note, conflicts, facts, artifacts));
   } catch (err) {

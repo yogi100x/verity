@@ -23,6 +23,7 @@ import type {
   Claim,
   Fact,
   Slot,
+  Source,
 } from '@/lib/contracts';
 import { ChcLevel, isValidLevel } from '@/lib/contracts';
 import { liveFacts } from '@/lib/ai/facts';
@@ -270,6 +271,18 @@ export interface BuildArtifactInput {
    *  output non-deterministic and untestable. Absent by default: the slot
    *  stays omitted, named, rather than dated with an invented value. */
   readonly assembledOn?: string;
+  /**
+   * The sources this pack draws on — required to fill a `source.inventory`
+   * slot (`cover.sources`, `documents`; see `isSourceInventorySlot`). Titles
+   * only (`Pick<Source, 'title'>`, reusing the frozen contract rather than
+   * inventing a new shape): a document list needs nothing else to be
+   * useful, and a fabricated "kind"/"date" beyond what a `Source` itself
+   * carries would be exactly the invented content this module exists to
+   * refuse. Absent by default, or an empty array: the slot stays honestly
+   * omitted/gap-prompted, exactly as if no source list had ever existed —
+   * this pipeline never invents a document list.
+   */
+  readonly sources?: readonly Pick<Source, 'title'>[];
 }
 
 /**
@@ -286,7 +299,7 @@ export interface BuildArtifactInput {
  */
 export interface StructuralAssertion {
   readonly slot_key: string;
-  readonly source: 'lane_c_copy' | 'framework_citation';
+  readonly source: 'lane_c_copy' | 'framework_citation' | 'source_inventory';
   /** The citation's `ref`, for a `framework_citation` slot; `null` otherwise. */
   readonly attribution: string | null;
 }
@@ -356,6 +369,60 @@ const FRAMEWORK_CITATION_SOURCES: Readonly<Record<string, CitationId>> = {
   'drug_therapies.framework_note': 'pg_23_2',
 };
 
+/**
+ * A slot whose sole `ontology_match` namespace is `source.inventory` — the
+ * pack's own attachment list (`cover.sources`, `documents`). Derived from
+ * template data, never a hardcoded key list: any slot whose `ontology_match`
+ * includes the exact key `'source.inventory'` qualifies.
+ *
+ * These slots look almost like `isStructuralCopySlot` — they need fixed
+ * metadata about the pack, not evidence about the person — but they do NOT
+ * match it: `cover.sources` / `documents` both declare `citation_required:
+ * false` **and** a real `gap_prompt` ("No documents have been added yet."),
+ * so `isStructuralCopySlot` (which requires `gap_prompt === null`)
+ * deliberately excludes them. They need their own predicate rather than a
+ * widened reuse of that one, because the two things it protects — "this slot
+ * has literally nowhere else to get its words from" (structural copy) and
+ * "this slot has a document-list input that will not always be supplied"
+ * (source inventory, with its own honest fall-back prompt) — are different
+ * guarantees.
+ *
+ * THE DEFECT THIS FIXES: a source-inventory fact has no supporting claims
+ * (correctly — it is metadata about the pack, not a claim about the person),
+ * so the DB constraint forces `status: 'unknown'`, and `isVerifiedBacked`
+ * (correctly) never lets such a fact back an ordinary evidence slot. Two
+ * individually-correct rules jointly excluded `cover.sources` /
+ * `documents` from ever filling. The fix is not to weaken
+ * `isVerifiedBacked` — it is to route these slots down the same
+ * fixed-metadata path as `cover.subject` / `method.provenance`, sourced from
+ * `BuildArtifactInput.sources` instead of a resolved `Fact`.
+ */
+function isSourceInventorySlot(slot: Pick<Slot, 'ontology_match'>): boolean {
+  return slot.ontology_match.includes('source.inventory');
+}
+
+/**
+ * Plain, deterministic list of document titles, one per line, in the order
+ * `BuildArtifactInput.sources` supplied them — nothing generated, nothing
+ * summarised, nothing sorted or reworded. Titles only: a `Source` carries a
+ * `kind` and a `created_at`, but `created_at` is when the document was
+ * UPLOADED, not a date the document itself asserts, and rendering it next to
+ * "Documents this pack draws on" would silently imply the opposite. `kind` is
+ * an internal storage classification (`pdf`, `image`, ...), not something a
+ * reader of an evidence pack needs to know to identify a document by its
+ * title. Both are real fields on the frozen `Source` contract and both are
+ * deliberately left out here — this list stays exactly what the label says
+ * it is: which documents, nothing else.
+ *
+ * `null` when no sources were supplied, or the list is empty: the caller
+ * (`buildArtifact`) falls through to the ordinary evidence path in that case,
+ * which lands on the slot's own `gap_prompt` — never an invented list.
+ */
+function sourceInventoryText(sources: readonly Pick<Source, 'title'>[] | undefined): string | null {
+  if (sources === undefined || sources.length === 0) return null;
+  return sources.map((source) => source.title).join('\n');
+}
+
 function structuralAssertion(artifactId: string, slotKey: string, text: string): Assertion {
   return {
     id: randomUUID(),
@@ -405,6 +472,19 @@ export function buildArtifact(input: BuildArtifactInput): BuildArtifactResult {
         continue;
       }
       // No mapped citation: fall through to the ordinary evidence path.
+    } else if (isSourceInventorySlot(slot)) {
+      const text = sourceInventoryText(input.sources);
+      if (text !== null) {
+        assertions.push(structuralAssertion(artifactId, slot.key, text));
+        structuralAssertions.push({ slot_key: slot.key, source: 'source_inventory', attribution: null });
+        continue;
+      }
+      // No sources supplied (or an empty list): fall through to the ordinary
+      // evidence path below. It cannot resolve there either — a
+      // source-inventory fact, if one existed, would carry no supporting
+      // claims and `isVerifiedBacked` never lets that back a slot — so this
+      // lands on the slot's own `gap_prompt`, honestly, exactly as if no
+      // document list had ever existed.
     }
 
     const resolution = resolveSlot(slot, facts, claimsById);

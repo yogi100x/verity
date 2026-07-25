@@ -1,12 +1,30 @@
 /**
  * Projections — lib/ai/projections.ts
  *
- * Four of the ontology namespaces the shipped artefact templates declare
- * (`conflict.*`, `gap.*`, `source.inventory`, `person.identity`) are not
- * filled by any Fact producer. Slot resolution only ever matches a `Fact`
- * against a slot's `ontology_match`, so the fix is to project these other
- * entities — Conflict, Gap, Source, the person themselves — into
+ * Two of the ontology namespaces the shipped artefact templates declare
+ * (`conflict.*`, `gap.*`) are not filled by any Fact producer. Slot
+ * resolution only ever matches a `Fact` against a slot's `ontology_match`,
+ * so the fix is to project these other entities — Conflict, Gap — into
  * contract-valid Facts that slot resolution can pick up unmodified.
+ *
+ * `source.inventory` and `person.identity` used to be projected here too,
+ * but neither can ever back a slot through the ordinary evidence path: both
+ * are metadata about the pack (which documents it draws on; who it is
+ * about), not a claim about the person, so the fact each projection produced
+ * carried no supporting claims — correctly, per the DB constraint
+ * (`status = 'unknown' or supporting_claim_ids non-empty`) — and
+ * `isVerifiedBacked` (`lib/ai/artifacts.ts`) correctly never lets a fact with
+ * no supporting claims fill a slot. `person.identity`'s one matching slot
+ * (`cover.subject`) is additionally unreachable for a second, independent
+ * reason: it is a structural-copy slot (`citation_required: false`,
+ * `gap_prompt: null`), so `buildArtifact` fills it from
+ * `STRUCTURAL_COPY_SOURCES` and `continue`s before the ordinary evidence path
+ * — the fact it carries in `facts` — is ever consulted. Both projections were
+ * dead code producing facts no slot could ever resolve to; they have been
+ * deleted (see `lib/ai/artifacts.ts`'s `isSourceInventorySlot` /
+ * `STRUCTURAL_COPY_SOURCES['cover.subject']` for the real fix: route the
+ * pack's own metadata down the structural/metadata path instead of
+ * pretending it is evidence).
  *
  * INVARIANT: everything a user sees traces to a verbatim quote from a
  * source. Every `canonical_value` here is copied verbatim from the entity it
@@ -24,14 +42,12 @@
  * function below pure and deterministic in its inputs alone.
  */
 
-import type { Conflict, Fact, Gap, Source } from '@/lib/contracts';
+import type { Conflict, Fact, Gap } from '@/lib/contracts';
 
 export interface ProjectionInput {
   readonly personId: string;
-  readonly person: { readonly display_name: string };
   readonly conflicts: readonly Conflict[];
   readonly gaps: readonly Gap[];
-  readonly sources: readonly Pick<Source, 'id' | 'kind' | 'title' | 'created_at'>[];
 }
 
 /* ============================ helpers ============================ */
@@ -141,59 +157,6 @@ export function projectGaps(input: ProjectionInput): Fact[] {
     .map((f) => f.fact);
 }
 
-/* ======================== source inventory ========================= */
-
-/**
- * One Fact listing the documents this artefact was assembled from. A
- * document inventory entry describes documents, not a claim about the
- * person — there is nothing to cite, so `supporting_claim_ids` is empty and
- * `status` is `unknown` per the DB constraint. `system_inferred` because the
- * list itself is something the pipeline assembled, not a claim any single
- * document makes about itself. `canonical_value` is a fixed, deterministic
- * join of the sources' own titles — no source is described, only named.
- */
-export function projectSourceInventory(input: ProjectionInput): Fact[] {
-  if (input.sources.length === 0) return [];
-
-  const titles = [...input.sources.map((s) => s.title)].sort(compareStrings);
-
-  const fact: Fact = {
-    ...baseFact(input.personId),
-    ontology_key: 'source.inventory',
-    subject: 'source inventory',
-    canonical_value: titles.join('; '),
-    provenance: 'system_inferred',
-    status: 'unknown',
-    supporting_claim_ids: [],
-  };
-
-  return [fact];
-}
-
-/* ========================= person identity ========================= */
-
-/**
- * One Fact naming the person this case is about. Who the pack is about is
- * something a user told the system, not something extracted from a
- * document, so `provenance: 'user_stated'`. There is no claim to cite (the
- * person's identity is not itself a document assertion), so
- * `supporting_claim_ids` is empty and `status` is `unknown` per the DB
- * constraint.
- */
-export function projectPersonIdentity(input: ProjectionInput): Fact[] {
-  const fact: Fact = {
-    ...baseFact(input.personId),
-    ontology_key: 'person.identity',
-    subject: 'identity',
-    canonical_value: input.person.display_name,
-    provenance: 'user_stated',
-    status: 'unknown',
-    supporting_claim_ids: [],
-  };
-
-  return [fact];
-}
-
 /* =============================== all =============================== */
 
 /**
@@ -202,12 +165,7 @@ export function projectPersonIdentity(input: ProjectionInput): Fact[] {
  * generated, random `Fact.id`).
  */
 export function projectAll(input: ProjectionInput): Fact[] {
-  const all = [
-    ...projectConflicts(input),
-    ...projectGaps(input),
-    ...projectSourceInventory(input),
-    ...projectPersonIdentity(input),
-  ];
+  const all = [...projectConflicts(input), ...projectGaps(input)];
 
   return [...all].sort((a, b) => compareStrings(a.ontology_key, b.ontology_key));
 }

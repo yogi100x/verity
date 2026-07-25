@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  projectConflicts,
-  projectGaps,
-  projectSourceInventory,
-  projectPersonIdentity,
-  projectAll,
-  type ProjectionInput,
-} from '@/lib/ai/projections';
+import { projectConflicts, projectGaps, projectAll, type ProjectionInput } from '@/lib/ai/projections';
 import { CaseSnapshot, Fact } from '@/lib/contracts';
 import fixtureRaw from '@/fixtures/margaret.json';
 
@@ -33,10 +26,8 @@ const fixture = CaseSnapshot.parse(fixtureRaw);
 function makeInput(): ProjectionInput {
   return {
     personId: fixture.person.id,
-    person: { display_name: fixture.person.display_name },
     conflicts: fixture.conflicts,
     gaps: fixture.gaps,
-    sources: fixture.sources,
   };
 }
 
@@ -82,14 +73,7 @@ describe('projectGaps', () => {
 describe('status / supporting_claim_ids DB constraint', () => {
   it('a fact with no supporting claims has status unknown', () => {
     const input = makeInput();
-    const sourceInventory = projectSourceInventory(input);
-    const personIdentity = projectPersonIdentity(input);
     const gaps = projectGaps(input);
-
-    for (const fact of [...sourceInventory, ...personIdentity]) {
-      expect(fact.supporting_claim_ids).toHaveLength(0);
-      expect(fact.status).toBe('unknown');
-    }
 
     for (const fact of gaps) {
       if (fact.supporting_claim_ids.length === 0) {
@@ -116,27 +100,6 @@ describe('status / supporting_claim_ids DB constraint', () => {
   });
 });
 
-describe('projectPersonIdentity', () => {
-  it('uses provenance user_stated, not document_extracted', () => {
-    const facts = projectPersonIdentity(makeInput());
-    expect(facts).toHaveLength(1);
-    expect(facts[0]?.provenance).toBe('user_stated');
-    expect(facts[0]?.canonical_value).toBe(fixture.person.display_name);
-    expect(facts[0]?.ontology_key).toBe('person.identity');
-  });
-});
-
-describe('projectSourceInventory', () => {
-  it('produces one fact, keyed source.inventory, listing every source title', () => {
-    const facts = projectSourceInventory(makeInput());
-    expect(facts).toHaveLength(1);
-    expect(facts[0]?.ontology_key).toBe('source.inventory');
-    for (const source of fixture.sources) {
-      expect(facts[0]?.canonical_value.includes(source.title)).toBe(true);
-    }
-  });
-});
-
 describe('Fact schema conformance', () => {
   it('every projected fact parses against the Fact zod schema', () => {
     const all = projectAll(makeInput());
@@ -144,6 +107,26 @@ describe('Fact schema conformance', () => {
     for (const fact of all) {
       expect(() => Fact.parse(fact)).not.toThrow();
     }
+  });
+});
+
+describe('projectAll no longer emits source.inventory or person.identity facts', () => {
+  // These two namespaces used to be projected here, but neither can ever
+  // back a slot: both describe the pack itself (its documents; who it is
+  // about), not a claim about the person, so the DB constraint forced
+  // `status: 'unknown'` with no supporting claims, and `isVerifiedBacked`
+  // (lib/ai/artifacts.ts) correctly never lets such a fact fill a slot.
+  // `cover.sources` / `documents` / `cover.subject` are now filled via
+  // `BuildArtifactInput.sources` / `.person` on the structural/metadata path
+  // instead — see lib/ai/artifacts.ts and lib/ai/__tests__/source-inventory.test.ts.
+  it('emits no fact keyed source.inventory', () => {
+    const all = projectAll(makeInput());
+    expect(all.some((f) => f.ontology_key === 'source.inventory')).toBe(false);
+  });
+
+  it('emits no fact keyed person.identity', () => {
+    const all = projectAll(makeInput());
+    expect(all.some((f) => f.ontology_key === 'person.identity')).toBe(false);
   });
 });
 
@@ -168,7 +151,6 @@ describe('projectAll determinism', () => {
       ...input,
       conflicts: [...input.conflicts].reverse(),
       gaps: [...input.gaps].reverse(),
-      sources: [...input.sources].reverse(),
     };
     const afterShuffle = projectAll(shuffled).map((f) => f.ontology_key);
 
@@ -200,16 +182,6 @@ describe('no fabricated prose', () => {
     for (const fact of projectGaps(input)) {
       const gap = input.gaps.find((g) => g.statement === fact.canonical_value);
       expect(gap).toBeDefined();
-    }
-
-    for (const fact of projectSourceInventory(input)) {
-      for (const source of input.sources) {
-        expect(fact.canonical_value.includes(source.title)).toBe(true);
-      }
-    }
-
-    for (const fact of projectPersonIdentity(input)) {
-      expect(fact.canonical_value).toBe(input.person.display_name);
     }
   });
 });

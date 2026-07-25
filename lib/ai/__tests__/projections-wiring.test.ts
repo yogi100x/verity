@@ -1,8 +1,18 @@
 /**
- * Wiring tests for the four projected namespaces (`conflict.*`, `gap.*`,
- * `source.inventory`, `person.identity`) that `lib/ai/projections.ts`
- * produces and `app/api/debug/inspect/route.ts`'s `GET` handler now
- * concatenates with the reconciled fact set before calling `buildArtifact`.
+ * Wiring tests for the two projected namespaces (`conflict.*`, `gap.*`) that
+ * `lib/ai/projections.ts` produces and `app/api/debug/inspect/route.ts`'s
+ * `GET` handler now concatenates with the reconciled fact set before calling
+ * `buildArtifact`. `source.inventory` (`cover.sources` / `documents`) and
+ * `person.identity` (`cover.subject`) are no longer projected as facts at
+ * all — see the header of lib/ai/projections.ts — and are instead filled on
+ * the structural/metadata path via `BuildArtifactInput.sources` / `.person`.
+ *
+ * `artifacts-wiring.test.ts` already covers the evidence-backed slots and
+ * the general omission/escaping invariants. This file is specifically about
+ * the SEAM the orchestrator's brief called out: slots that were declared by
+ * the templates from hour 0 but had no Fact producer until this PR, and the
+ * headline defect — `gp_brief_v1.questions` used to say "ask for a document"
+ * while the furosemide question already existed, unrendered.
  *
  * `artifacts-wiring.test.ts` already covers the evidence-backed slots and
  * the general omission/escaping invariants. This file is specifically about
@@ -23,7 +33,7 @@ import { reconcile } from '@/lib/ai/reconcile';
 import { detectGaps } from '@/lib/detectors/gaps';
 import { projectAll } from '@/lib/ai/projections';
 import { buildArtifact, type BackingClaim } from '@/lib/ai/artifacts';
-import { templateByKey, slotsOf } from '@/lib/ai/templates';
+import { templateByKey } from '@/lib/ai/templates';
 import { escapeHtml } from '@/lib/ai/inspect-html';
 import { PERSISTENT_BANNER, footer } from '@/lib/copy/safety';
 import { FRAMEWORK_CITATIONS } from '@/lib/detectors/well_managed';
@@ -85,60 +95,22 @@ describe('GET /api/debug/inspect — projected gap facts reach the pack\'s gap s
 });
 
 describe('GET /api/debug/inspect — the source inventory: the fixture\'s document titles reach the artefacts section', () => {
-  it('projectSourceInventory itself joins every source title into one canonical_value, verbatim', () => {
-    // `source.inventory` (`cover.sources` / `documents`) declares
-    // `citation_required: false`, but `factsForSlot` (lib/ai/artifacts.ts)
-    // applies its central verified-backing rule to EVERY slot regardless of
-    // `citation_required` — and `projectSourceInventory` correctly gives the
-    // inventory fact NO supporting claims (there is nothing in the record to
-    // cite for "here is the list of documents"; DB constraint:
-    // `status = 'unknown' or supporting_claim_ids non-empty`). The
-    // consequence is that the dedicated `cover.sources` / `documents` slots
-    // can never resolve to this fact and always render their gap_prompt —
-    // proven below alongside the positive result: the SAME titles are still
-    // visible in the artefacts section, via the evidence citations on every
-    // slot that draws on those documents.
-    const projected = projectAll({
-      personId: fixture.person.id,
-      person: { display_name: fixture.person.display_name },
-      conflicts: fixture.conflicts,
-      gaps: [],
-      sources: fixture.sources,
-    });
-    const inventory = projected.find((f) => f.ontology_key === 'source.inventory');
-    expect(inventory).toBeDefined();
+  // THE DEFECT: `cover.sources` / `documents` used to always fall through to
+  // gap_prompt, because the only Fact that could ever match `source.inventory`
+  // (`projectSourceInventory`, since deleted) carried no supporting claims and
+  // `isVerifiedBacked` correctly never lets such a fact back a slot. The fix
+  // routes these slots down the structural/metadata path instead — see
+  // `isSourceInventorySlot` (lib/ai/artifacts.ts) — sourced from
+  // `BuildArtifactInput.sources`, not a resolved Fact. See
+  // `lib/ai/__tests__/source-inventory.test.ts` for the focused unit coverage;
+  // these tests prove the same thing end-to-end through the real route.
+  it('cover.sources and documents are FILLED — every fixture source title appears, and the slots are no longer gap-prompted', async () => {
+    const artifactsSection = await getArtifactsSection();
+    expect(artifactsSection).toContain('data-slot-key="cover.sources" data-renderer="list" data-state="verbatim_copy"');
+    expect(artifactsSection).toContain('data-slot-key="documents" data-renderer="list" data-state="verbatim_copy"');
     for (const source of fixture.sources) {
-      expect(inventory?.canonical_value).toContain(source.title);
+      expect(artifactsSection).toContain(escapeHtml(source.title));
     }
-  });
-
-  it('cover.sources and documents render their gap_prompt — the inventory fact has no citable claim to back them', async () => {
-    const artifactsSection = await getArtifactsSection();
-    const chcSourcesSlot = slotsOf(templateByKey('chc_dst_pack_v1'))
-      .map((s) => s.slot)
-      .find((s) => s.key === 'cover.sources');
-    const gpDocumentsSlot = slotsOf(templateByKey('gp_brief_v1'))
-      .map((s) => s.slot)
-      .find((s) => s.key === 'documents');
-    if (chcSourcesSlot === undefined || gpDocumentsSlot === undefined) {
-      throw new Error('expected both cover.sources and documents slots to exist');
-    }
-    expect(artifactsSection).toContain('data-slot-key="cover.sources" data-renderer="list" data-state="gap_prompt"');
-    expect(artifactsSection).toContain('data-slot-key="documents" data-renderer="list" data-state="gap_prompt"');
-  });
-
-  it('several fixture document titles are still visible in the artefacts section, via the evidence citations of the slots that draw on them — an incidental byproduct, not a guarantee for every source', async () => {
-    const artifactsSection = await getArtifactsSection();
-    const visible = fixture.sources.filter((source) => artifactsSection.includes(escapeHtml(source.title)));
-    // Every source cited as evidence somewhere in either template shows its
-    // title next to its quote. That is not the same guarantee as the
-    // dedicated inventory slots above would give (a source cited nowhere as
-    // evidence — e.g. one whose only relevant claims land in a domain with
-    // no evidence-backed slot in either template — will not appear here),
-    // so this is a real but partial mitigation, not a substitute for fixing
-    // cover.sources / documents.
-    expect(visible.length).toBeGreaterThan(0);
-    expect(visible).toContainEqual(expect.objectContaining({ title: 'Discharge summary' }));
   });
 });
 
@@ -205,31 +177,33 @@ describe('GET /api/debug/inspect — drug_therapies.framework_note renders the f
   });
 });
 
-describe('GET /api/debug/inspect — cover.subject precedence: structural copy wins, the projected fact never double-fills it', () => {
+describe('GET /api/debug/inspect — cover.subject: filled by structural copy only, exactly once', () => {
+  // `person.identity` (the projection that used to feed cover.subject's
+  // ordinary evidence path) has been deleted — see the header of
+  // lib/ai/projections.ts. `cover.subject` is a structural-copy slot
+  // (`citation_required: false`, `gap_prompt: null`), so `buildArtifact`
+  // fills it from `STRUCTURAL_COPY_SOURCES` and `continue`s before the
+  // ordinary evidence path is ever consulted; there is no longer a competing
+  // fact that could double-fill it even in principle.
   it('cover.subject is the person\'s display name via structural copy, exactly once', async () => {
     const artifactsSection = await getArtifactsSection();
     const matches = artifactsSection.match(/data-slot-key="cover\.subject"/g) ?? [];
-    // Exactly one slot element for cover.subject — the ordinary evidence
-    // path (person.identity) never ALSO produces an assertion for it, which
-    // is what `buildArtifact`'s `continue` after a successful structural
-    // fill guarantees (lib/ai/artifacts.ts).
     expect(matches).toHaveLength(1);
     expect(artifactsSection).toContain(fixture.person.display_name);
   });
 
-  it('proven directly: with a person supplied, the projected person.identity fact is present in the input facts but never independently fills cover.subject', () => {
+  it('proven directly against buildArtifact: cover.subject fills from structural copy, not from any fact in the input set', () => {
     const now = new Date('2026-07-25T00:00:00.000Z');
     const facts = reconciledFacts();
     const gaps = detectGaps(facts, fixture.sources, now);
     const projected = projectAll({
       personId: fixture.person.id,
-      person: { display_name: fixture.person.display_name },
       conflicts: fixture.conflicts,
       gaps,
-      sources: fixture.sources,
     });
-    const personIdentityFact = projected.find((f) => f.ontology_key === 'person.identity');
-    expect(personIdentityFact).toBeDefined();
+    // No projected fact is keyed person.identity any more — cover.subject has
+    // nothing to double-fill against even in principle.
+    expect(projected.some((f) => f.ontology_key === 'person.identity')).toBe(false);
 
     const claimsById = new Map<string, BackingClaim>();
     for (const claim of fixture.claims) claimsById.set(claim.id, { verified_substring: claim.verified_substring, quote: claim.quote });
