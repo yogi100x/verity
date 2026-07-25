@@ -543,7 +543,7 @@
           "id": "a5000000-0000-4000-8000-000000000002",
           "artifact_id": "a0000000-0000-4000-8000-000000000001",
           "slot_key": "drug_therapies.framework_note",
-          "text": "Practice Guidance note 23.2 states that where needs are being managed via medication, it may be more appropriate to reflect this in the Drug Therapies and Medication domain.",
+          "text": "Practice Guidance note 23.2 states that where needs are being managed via medication, it may be more appropriate to reflect this in the Drug Therapies and Medication domain. The National Framework (paragraph 162) states that needs which are well-managed remain needs. Margaret's own account of managing her medicines is the supporting evidence recorded below.",
           "fact_ids": ["f0000000-0000-4000-8000-000000000007"],
           "citation_verified": true
         },

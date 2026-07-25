@@ -5,11 +5,10 @@
  * fixtures/templates.json; nothing here should ever need to change for it.
  */
 
-import type { ArtifactSlotView } from "@/components/data/dal";
+import { factClaimProvenances, type ArtifactSlotView } from "@/components/data/dal";
 import type { Fact } from "@/lib/contracts";
 import { ProvenanceTag } from "@/components/provenance/ProvenanceTag";
 import { GhostCard } from "@/components/ui/GhostCard";
-import { resolveFactProvenance } from "./factProvenance";
 
 const FALLBACK_GAP_PROMPT = "Nothing recorded for this section yet.";
 
@@ -37,14 +36,15 @@ function ProvenanceRow({ facts }: { facts: Fact[] }) {
   if (facts.length === 0) return null;
   return (
     <div className="mt-3 flex flex-wrap gap-2">
-      {facts.map((fact) => {
-        const provenance = resolveFactProvenance(fact);
-        return "citation" in provenance ? (
-          <ProvenanceTag key={fact.id} citation={provenance.citation} />
-        ) : (
-          <ProvenanceTag key={fact.id} userStated />
-        );
-      })}
+      {facts.flatMap((fact) =>
+        factClaimProvenances(fact).map((provenance, index) =>
+          "citation" in provenance ? (
+            <ProvenanceTag key={`${fact.id}-${index}`} citation={provenance.citation} />
+          ) : (
+            <ProvenanceTag key={`${fact.id}-${index}`} userStated />
+          ),
+        ),
+      )}
     </div>
   );
 }

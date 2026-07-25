@@ -36,6 +36,14 @@ export type ProvenanceTagProps =
   | { citation: ProvenanceCitation; userStated?: never }
   | { userStated: true; citation?: never };
 
+/** The citation deep link — GET /api/sources/[id]/open 302s to the document
+ *  (signed URL in live, demo asset otherwise) and carries `?page=` through
+ *  as a `#page=N` fragment on the target, which native PDF viewers honour. */
+function openSourceHref(citation: ProvenanceCitation): string {
+  const base = `/api/sources/${encodeURIComponent(citation.sourceId)}/open`;
+  return citation.locator.page !== null ? `${base}?page=${citation.locator.page}` : base;
+}
+
 function shortSourceName(title: string): string {
   // Keeps the chip compact; the full title always appears in the
   // popover/sheet, so nothing is lost by truncating here.
@@ -205,11 +213,10 @@ function PopoverContent({
       <p className="mt-3 text-body-s text-ink-secondary">
         {citation.sourceTitle} · {locatorLabel}
       </p>
-      {/* TODO(Lane A): mint a 60-second signed URL server-side and open
-         `${url}#page=N` in a new tab — native PDF viewers honour the
-         #page= fragment. This href is a placeholder until the API lands. */}
       <a
-        href="#"
+        href={openSourceHref(citation)}
+        target="_blank"
+        rel="noopener noreferrer"
         data-source-id={citation.sourceId}
         className="mt-3 inline-block text-body-s font-medium text-brand hover:underline"
       >
@@ -242,9 +249,10 @@ function MobileSheet({
         className="fixed inset-x-0 bottom-0 z-40 rounded-t-cta border border-hairline bg-surface p-5 shadow-sheet"
       >
         <PopoverContent citation={citation} pageLabel={pageLabel} locatorLabel={locatorLabel} />
-        {/* TODO(Lane A): same signed-URL placeholder as the popover link above. */}
         <a
-          href="#"
+          href={openSourceHref(citation)}
+          target="_blank"
+          rel="noopener noreferrer"
           data-source-id={citation.sourceId}
           className="mt-4 flex h-[48px] w-full items-center justify-center rounded-card border border-hairline bg-surface text-body font-medium text-ink"
         >

@@ -52,6 +52,12 @@ export function ConflictCard({ conflict }: { conflict: ConflictView }) {
       return;
     }
 
+    // Fail-safe: information is never gated on motion. If the observer has
+    // not fired shortly after mount (e.g. an unforeseen viewport/threshold
+    // interaction), the card shows anyway and only the entrance flourish is
+    // lost.
+    const failSafe = window.setTimeout(() => setHasEntered(true), 700);
+
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -61,10 +67,16 @@ export function ConflictCard({ conflict }: { conflict: ConflictView }) {
           }
         }
       },
-      { threshold: 0.2 },
+      // threshold 0, not 0.2: on a small phone the stacked card is taller
+      // than the viewport, so 20% of it may never be visible at once and a
+      // higher threshold leaves the money moment permanently invisible.
+      { threshold: 0 },
     );
     observer.observe(node);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(failSafe);
+    };
   }, []);
 
   const headline = `${capitalize(numberWord(conflict.chips.length))} sources disagree about the ${conflict.subject}.`;

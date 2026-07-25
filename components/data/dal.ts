@@ -202,6 +202,52 @@ export type TimelineEvent = {
   provenance: EventProvenance;
 };
 
+/**
+ * Every provenance shape a fact carries — one per supporting claim, in claim
+ * order. `resolveProvenance` deliberately answers with the FIRST claim only
+ * (right for a timeline row); an artefact assertion citing a multi-source
+ * fact (the three-source furosemide conflict) must show every source, so
+ * this is the multi-claim sibling. Fails loud on any unresolvable reference,
+ * same rule as everything else in this file (docs/design.md §10).
+ */
+export function factClaimProvenances(fact: Fact): EventProvenance[] {
+  const caseId = ALL_CASE_IDS.find((id) => indexFor(id).factsById.has(fact.id));
+  if (caseId === undefined) {
+    throw new Error(
+      `fact ${fact.id} (${fact.subject}) belongs to no seeded case — refusing to render`,
+    );
+  }
+  const idx = indexFor(caseId);
+
+  if (fact.supporting_claim_ids.length === 0) {
+    if (fact.provenance === "user_stated") return [{ userStated: true }];
+    throw new Error(
+      `fact ${fact.id} (${fact.subject}) has no supporting claims and is not user_stated — ` +
+        `a sourceless fact must never reach the UI`,
+    );
+  }
+
+  return fact.supporting_claim_ids.map((claimId): EventProvenance => {
+    const claim = idx.claimsById.get(claimId);
+    if (claim === undefined) {
+      throw new Error(`fact ${fact.id} references unknown claim ${claimId}`);
+    }
+    if (claim.provenance === "user_stated") return { userStated: true };
+    const source = idx.sourcesById.get(claim.source_id);
+    if (source === undefined) {
+      throw new Error(`claim ${claim.id} references unknown source ${claim.source_id}`);
+    }
+    return {
+      citation: {
+        sourceTitle: source.title,
+        locator: claim.locator,
+        quote: claim.quote,
+        sourceId: source.id,
+      },
+    };
+  });
+}
+
 function firstClaimOf(fact: Fact, idx: CaseIndex): Claim | undefined {
   const id = fact.supporting_claim_ids[0];
   return id !== undefined ? idx.claimsById.get(id) : undefined;

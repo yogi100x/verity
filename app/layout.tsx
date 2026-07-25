@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Public_Sans, IBM_Plex_Mono } from "next/font/google";
 import { SafetyBanner } from "@/components/ui/SafetyBanner";
+import { SwRegistration } from "@/components/shell/SwRegistration";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -45,6 +46,7 @@ export default function RootLayout({
       className={`${fraunces.variable} ${publicSans.variable} ${plexMono.variable} h-full`}
     >
       <body className="min-h-full flex flex-col">
+        <SwRegistration />
         <SafetyBanner />
         <div className="flex-1 flex flex-col">{children}</div>
       </body>
