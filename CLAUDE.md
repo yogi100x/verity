@@ -7,9 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Quick start
 
 ```bash
-pnpm install
-pnpm test          # THE GATE — must pass before any lane launches
+./scripts/bootstrap.sh    # THE GATE — must end GREEN before any lane launches
 ```
+
+There is no `package.json` in the repo yet — the Next.js scaffold happens at hour 0. `bootstrap.sh` scaffolds it, installs only the frozen stack, wires Vitest, appends the design tokens, and runs the keystone test. Idempotent; safe to re-run. It never touches `lib/contracts.ts`, `fixtures/`, `docs/` or the README.
+
+After bootstrap, `pnpm test` works normally.
 
 The keystone test (`lib/__tests__/contract.test.ts`) validates the entire contract against `fixtures/margaret.json`. It is the first quality gate at hour 0 and the first thing the orchestrator checks in every merge window. If it fails, every lane is building against a lie.
 
@@ -22,9 +25,13 @@ The keystone test (`lib/__tests__/contract.test.ts`) validates the entire contra
 | `pnpm test` | Run all tests (vitest). Contract, unit, and integration tests. Must be green before merging. |
 | `pnpm test -- lib/` | Run tests in a specific directory |
 | `pnpm test -- --reporter=verbose` | Run with verbose output for debugging |
-| `pnpm test:watch` | Watch mode (if configured in package.json) |
+| `pnpm test:watch` | Watch mode |
+| `pnpm typecheck` | `tsc --noEmit` |
+| `./scripts/bootstrap.sh` | Hour 0: scaffold + frozen stack + gate. Run once, by the orchestrator, on `main`. |
+| `./scripts/db-push.sh` | Apply schema + RLS. Lanes A and D only. Reminds you to enable anonymous sign-ins. |
+| `./scripts/verify.sh` | **Run before every PR.** Contract unmodified, no judgement fields, no urgency language in components, types and tests green, changes confined to one lane. |
 
-No build, lint, or dev server commands currently exist — the codebase is a pure contract + fixtures repo at hour 0. Lanes add Next.js frontend, backend API, and CLI tools as they build.
+Before `bootstrap.sh` runs, the repo is contract + fixtures + docs only — there is no `package.json`, so `pnpm` commands will fail. Lanes add the frontend, API and detectors as they build.
 
 ---
 
@@ -42,7 +49,7 @@ No build, lint, or dev server commands currently exist — the codebase is a pur
 
 | Lane | Owner | Territory | Needs API? | Needs DB? | Brief |
 |------|-------|-----------|------------|-----------|-------|
-| **A** | Pipeline | `lib/ai/**`, `app/api/**`, `supabase/migrations/*` | Yes | Yes | `docs/lanes/lane-a-pipeline.md` |
+| **A** | Pipeline | `lib/ai/**`, `app/api/**`, `supabase/migrations/0002+` (additive only) | Yes | Yes | `docs/lanes/lane-a-pipeline.md` |
 | **B** | Surface | `app/(app)/**`, `components/**`, `app/globals.css`, PWA manifest/icons | No | No | `docs/lanes/lane-b-surface.md` |
 | **C** | Safety & detectors | `lib/safety/**`, `lib/detectors/**`, `lib/copy/**` | No | No | `docs/lanes/lane-c-safety.md` |
 | **D** | Integrator & demo | `demo/**`, `scripts/**`, `.github/**`, `vercel.json`, service worker | Yes | Yes | `docs/lanes/lane-d-integrator.md` |
@@ -60,9 +67,21 @@ Lanes B and C need nothing but the repo — they can start the instant the contr
 
 **Critical structural constraint:** There is no `severity`, `urgency`, `priority`, `rank`, `risk`, or `score` field anywhere in this contract, at any nesting level, now or ever. The model cannot express a clinical judgement because there is nowhere to put one. This is the primary regulatory control and it is structural, not advisory.
 
+Note `priority` is legal as a **CHC level value** (`ChcLevel`), because it is one of the levels on the official Decision Support Tool. What is banned is a judgement **field**. `scripts/verify.sh` enforces the distinction.
+
+**The CHC level data is verified, not guessed.** `CHC_DOMAIN_LEVELS` came from the DST guidance (October 2022, pp.59–61). Three domains cap at High — continence, communication, psychological and emotional needs — and altered states of consciousness skips Severe entirely while still reaching Priority. Three of these were wrong before verification. Do not "correct" them.
+
 ### The fixture
 
-`fixtures/margaret.json` is a full `CaseSnapshot` (a synthetic case with ~30 documents, ~200 claims, conflicts, gaps, and both template artifacts). Lanes B and C build every screen from this fixture alone, with no API key and no database. When Lane A lands real extraction, imports change and tests pass without any other edits.
+`fixtures/margaret.json` is a full `CaseSnapshot`: **4 sources, 17 claims, 10 facts, 1 conflict, 4 gaps, and both phase-1 artefacts.** Lanes B and C build every screen from this fixture alone, with no API key and no database. When Lane A lands real extraction, an import changes and tests pass without any other edit.
+
+Three things in it are deliberate and must not be "cleaned up":
+
+- **One claim has `verified_substring: false`** — a quote that is not in its source. It exercises the drop path, and `stats` reads 17 extracted / 1 dropped so the UI has a real number to render.
+- **One fact is superseded** — the March cardiology instruction has `valid_to` set and `superseded_by` pointing at the disputed June fact. Stretch S6 has something to render on day one.
+- **One artefact assertion is empty** — the CHC continence slot has no facts and no text, so Lane B must build the `gap_prompt` fall-through rather than discovering it later.
+
+Verified: all 16 verified quotes are literal substrings of their sources, zero dangling references.
 
 ---
 
@@ -114,7 +133,9 @@ See `docs/stack-freeze.md` for the full rationale and rejection list.
 | **Writing any code** | `docs/contract-spec.md` + `docs/stack-freeze.md` |
 | **Designing anything** | `docs/design.md`, and open `demo/design-showcase.html` in a browser |
 | **Running the orchestrator review loop** | `docs/orchestrator-runbook.md` |
-| **Understanding data sources and CHC** | `docs/data-sources.md` and the research directory |
+| **Testing what you built** | `docs/user-journey.md` — 9 click-and-tick journeys, lane-attributed. This is how the orchestrator reviews. |
+| **Understanding data sources and CHC** | `docs/data-sources.md` — real test documents plus framework citations verified against primary sources |
+| **Deciding what to build if you finish early** | `docs/implementation-plan.md` §7b — eight ranked stretch goals with owners |
 
 ---
 
