@@ -6,6 +6,7 @@ import {
 } from '@/lib/ai/reconcile';
 import { GET } from '@/app/api/debug/inspect/route';
 import { CaseSnapshot, type Claim, type DatePrecision } from '@/lib/contracts';
+import { sectionById } from './html-sections';
 import fixtureRaw from '@/fixtures/margaret.json';
 
 const fixture = CaseSnapshot.parse(fixtureRaw);
@@ -196,12 +197,9 @@ describe('GET /api/debug/inspect — conflicts rendered end-to-end', () => {
     const res = await GET(new Request('http://localhost/api/debug/inspect?mode=fixtures'));
     const bodyText = await res.text();
 
-    const sectionStart = bodyText.indexOf('Disagreements between sources');
-    const nextSectionStart = bodyText.indexOf('source-block', sectionStart);
-    const conflictsSectionHtml =
-      sectionStart === -1
-        ? ''
-        : bodyText.slice(sectionStart, nextSectionStart === -1 ? undefined : nextSectionStart);
+    // Scoped by section id, not sliced between a heading and an unrelated
+    // marker: see `./html-sections.ts` for why that mattered.
+    const conflictsSectionHtml = sectionById(bodyText, 'conflicts');
 
     expect(conflictsSectionHtml).not.toContain(fabricatedClaim.quote);
   });
@@ -221,10 +219,7 @@ describe('GET /api/debug/inspect — conflicts rendered end-to-end', () => {
     const res = await GET(new Request('http://localhost/api/debug/inspect?mode=fixtures'));
     const bodyText = await res.text();
 
-    const start = bodyText.indexOf('Disagreements between sources');
-    const end = bodyText.indexOf('source-block', start);
-    expect(start).toBeGreaterThan(-1);
-    const section = bodyText.slice(start, end === -1 ? undefined : end);
+    const section = sectionById(bodyText, 'conflicts');
 
     // One header row plus one row per live claim.
     expect((section.match(/<tr>/g) ?? []).length).toBe(4);

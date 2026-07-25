@@ -14,7 +14,7 @@
  * single interpolation site, with no exceptions.
  */
 
-import type { Conflict } from '@/lib/contracts';
+import type { Conflict, Fact } from '@/lib/contracts';
 
 /** A structural view of an extraction report — deliberately independent of
  *  `lib/ai/extract.ts` (owned by a concurrent agent) so this file has no
@@ -101,6 +101,169 @@ type _ViewCoversConflictContract = [ViewScalarKeys] extends [ConflictScalarKeys]
   : never;
 const _viewCoversConflictContract: _ViewCoversConflictContract = true;
 void _viewCoversConflictContract;
+
+/**
+ * A structural view of one derived Fact for the timeline section —
+ * deliberately independent of `lib/ai/facts.ts` / `lib/ai/reconcile.ts` /
+ * `lib/contracts.ts` (same pattern as `InspectConflictView` above), so this
+ * module keeps no compile-time coupling to the reconciliation pipeline.
+ * Satisfied structurally by whatever the route builds from the real `Fact`
+ * plus each supporting claim's source classification.
+ *
+ * `_factViewMatchesContract` below ties its Fact-derived fields to the frozen
+ * contract at typecheck time, the same way `_viewCoversConflictContract`
+ * does for conflicts. Without that tie, renaming `canonical_value` or
+ * `valid_to` in `lib/contracts.ts` would leave this view compiling happily
+ * and rendering a blank validity window on the one page a reviewer uses to
+ * check supersession.
+ */
+export interface InspectFactView {
+  readonly id: string;
+  readonly ontology_key: string;
+  readonly subject: string;
+  readonly canonical_value: string;
+  readonly status: string;
+  readonly valid_from: string | null;
+  readonly valid_to: string | null;
+  readonly superseded: boolean;
+  readonly supporting: ReadonlyArray<{
+    readonly quote: string;
+    readonly source_title: string;
+    readonly role: string;
+    readonly role_reason: string;
+  }>;
+}
+
+/**
+ * Load-bearing, typecheck-time: every Fact-derived field on the view must
+ * still exist on the frozen `Fact` contract, with a compatible type. `id`,
+ * `ontology_key`, `subject`, `canonical_value`, `valid_from` and `valid_to`
+ * are checked directly; `status` is `string` here on purpose (the view is
+ * format-agnostic) so it is checked as assignable FROM the contract's union.
+ * `superseded` and `supporting` are view-only projections and have no
+ * contract counterpart.
+ */
+type FactDerivedKeys = 'id' | 'ontology_key' | 'subject' | 'canonical_value' | 'valid_from' | 'valid_to';
+type _FactViewMatchesContract =
+  Pick<InspectFactView, FactDerivedKeys> extends Pick<Fact, FactDerivedKeys>
+    ? Fact['status'] extends InspectFactView['status']
+      ? true
+      : never
+    : never;
+const _factViewMatchesContract: _FactViewMatchesContract = true;
+void _factViewMatchesContract;
+
+/**
+ * A date for display. Returns RAW text — the caller escapes, exactly once, at
+ * the interpolation site. This used to escape internally and then be escaped
+ * again by its caller, so a date carrying an `&` rendered as `&amp;amp;`.
+ * Escaping in one place only is the rule that keeps that from recurring.
+ */
+function fmtDate(d: string | null): string {
+  return d === null ? '—' : d;
+}
+
+function renderSupportingRow(s: InspectFactView['supporting'][number]): string {
+  return `
+    <tr>
+      <td>${escapeHtml(s.source_title)}</td>
+      <td><span class="badge badge-role badge-role-${escapeHtml(s.role)}">${escapeHtml(s.role)}</span></td>
+      <td>${escapeHtml(s.role_reason)}</td>
+      <td class="mono quote-cell">${escapeHtml(s.quote)}</td>
+    </tr>`;
+}
+
+function renderFactCard(fact: InspectFactView): string {
+  const window = `${fmtDate(fact.valid_from)} – ${fact.superseded ? fmtDate(fact.valid_to) : 'current'}`;
+  const supersededNote = fact.superseded
+    ? `<p class="fact-superseded-note">
+         This record was not wrong — it was true earlier, and a later
+         instruction replaced it. It is kept here with its supporting quotes
+         so it can still be checked.
+       </p>`
+    : '';
+
+  return `
+    <div class="fact-card ${fact.superseded ? 'fact-card-superseded' : ''}">
+      <div class="fact-meta">
+        <span class="pill">status: ${escapeHtml(fact.status)}</span>
+        <span class="pill">valid: ${escapeHtml(window)}</span>
+        ${fact.superseded ? '<span class="pill pill-superseded">superseded</span>' : ''}
+      </div>
+      <p class="fact-value ${fact.superseded ? 'fact-value-superseded' : ''}">${escapeHtml(fact.canonical_value)}</p>
+      ${supersededNote}
+      <table class="fact-supporting-table">
+        <thead>
+          <tr>
+            <th>source</th>
+            <th>read as</th>
+            <th>why</th>
+            <th>quote</th>
+          </tr>
+        </thead>
+        <tbody>${fact.supporting.map(renderSupportingRow).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+/** Facts arrive in the order `lib/ai/facts.ts` emitted them (valid_from
+ *  ascending), and that order is preserved rather than re-derived here. A
+ *  second comparator in this file would have been one more thing to drift,
+ *  and the version that existed tiebroke on `Fact.id` — a fresh randomUUID —
+ *  so the page could order two same-day periods differently on each render. */
+function renderFactSubjectGroup(subject: string, facts: readonly InspectFactView[]): string {
+  return `
+    <div class="fact-subject-group">
+      <h3 class="fact-subject-heading">${escapeHtml(subject)}</h3>
+      ${facts.map(renderFactCard).join('')}
+    </div>`;
+}
+
+/**
+ * "What each record says, over time" — the timeline view of derived Facts.
+ * Grouped by subject, each group shown in date order, so a supersession —
+ * two facts about the same subject, one closing where the other opens — is
+ * legible without reading raw ids. A superseded fact is rendered struck
+ * through and visually de-emphasised via `.fact-card-superseded` /
+ * `.fact-value-superseded`, but its value, validity window and supporting
+ * quotes all stay in the markup — nothing about a superseded fact is ever
+ * omitted, only styled differently. Every interpolated value — subject,
+ * canonical value, quotes, source titles, role reasons — originates in
+ * user-uploaded documents and goes through `escapeHtml`.
+ */
+function renderFactsSection(facts: readonly InspectFactView[]): string {
+  if (facts.length === 0) {
+    return '';
+  }
+
+  const bySubject = new Map<string, InspectFactView[]>();
+  for (const fact of facts) {
+    const list = bySubject.get(fact.subject);
+    if (list === undefined) {
+      bySubject.set(fact.subject, [fact]);
+    } else {
+      list.push(fact);
+    }
+  }
+
+  const subjects = [...bySubject.keys()].sort();
+  const groups = subjects
+    .map((subject) => renderFactSubjectGroup(subject, bySubject.get(subject) ?? []))
+    .join('');
+
+  return `
+    <section class="facts-section" id="facts">
+      <h2 class="facts-heading">What each record says, over time</h2>
+      <p class="facts-explainer">
+        Each block below is one period during which a record held one state, built
+        from the claims that support it. A record marked superseded is not
+        deleted — it is shown struck through, with the record that replaced it
+        and the reasoning behind each source's classification, so the timeline
+        can be checked rather than taken on trust.
+      </p>
+      ${groups}
+    </section>`;
+}
 
 function fmtLocatorPart(n: number | null): string {
   return n === null ? '—' : escapeHtml(String(n));
@@ -303,6 +466,13 @@ function renderConflictCard(conflict: InspectConflictView): string {
  * tables so it is the first thing a reviewer sees. Every value interpolated
  * here (subject, question, resolution, ids, dates, values, quotes, titles)
  * is untrusted transcript-derived text and goes through `escapeHtml`.
+ *
+ * `id="conflicts"` is not decoration. Tests that need to assert something
+ * about THIS section scope to it by id; the previous approach sliced the page
+ * between the heading text and the next `source-block` marker, which silently
+ * made the assertion depend on nothing else ever being rendered in between.
+ * That is a test dictating page layout, and it did: it is why the timeline
+ * section was originally appended after the per-source blocks.
  */
 function renderConflictsSection(conflicts: readonly InspectConflictView[]): string {
   const body =
@@ -311,7 +481,7 @@ function renderConflictsSection(conflicts: readonly InspectConflictView[]): stri
       : conflicts.map(renderConflictCard).join('');
 
   return `
-    <section class="conflicts-section">
+    <section class="conflicts-section" id="conflicts">
       <h2 class="conflicts-heading">Disagreements between sources</h2>
       <p class="conflicts-explainer">
         A disagreement here is never resolved automatically. This page shows what each
@@ -601,6 +771,100 @@ const STYLE = `
     overflow-y: auto;
     font-size: 0.85rem;
   }
+  .facts-section {
+    background: white;
+    border: 2px solid var(--brand);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 3rem;
+  }
+  .facts-heading {
+    font-size: 1.5rem;
+    margin: 0 0 0.5rem;
+    color: var(--brand);
+  }
+  .facts-explainer {
+    max-width: 60rem;
+    color: var(--ink-muted);
+    font-size: 0.95rem;
+    margin: 0 0 1.5rem;
+  }
+  .fact-subject-group {
+    margin-bottom: 2rem;
+  }
+  .fact-subject-group:last-child { margin-bottom: 0; }
+  .fact-subject-heading {
+    font-size: 1.1rem;
+    margin: 0 0 0.75rem;
+    color: var(--ink);
+    text-transform: capitalize;
+  }
+  .fact-card {
+    background: var(--citation-bg);
+    border: 1px solid var(--citation-mid);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .fact-card:last-child { margin-bottom: 0; }
+  .fact-card-superseded {
+    background: var(--hairline);
+    border-color: var(--ink-muted);
+    opacity: 0.85;
+  }
+  .fact-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .pill-superseded {
+    background: var(--unverified-bg);
+    color: var(--unverified-ink);
+    font-weight: 600;
+  }
+  .fact-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--brand);
+    margin: 0 0 0.75rem;
+    padding: 0.6rem 1rem;
+    background: white;
+    border-left: 4px solid var(--brand);
+    border-radius: 4px;
+  }
+  .fact-value-superseded {
+    text-decoration: line-through;
+    color: var(--ink-muted);
+    border-left-color: var(--ink-muted);
+    font-weight: 600;
+  }
+  .fact-superseded-note {
+    color: var(--ink-muted);
+    font-size: 0.85rem;
+    font-style: italic;
+    margin: 0 0 0.75rem;
+  }
+  .fact-supporting-table {
+    background: white;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .badge-role {
+    background: var(--hairline);
+    color: var(--ink-muted);
+    border: 1px solid var(--ink-muted);
+  }
+  .badge-role-instruction {
+    background: var(--citation-bg);
+    color: var(--citation-ink);
+    border-color: var(--citation-mid);
+  }
+  .badge-role-observation {
+    background: var(--unverified-bg);
+    color: var(--unverified-ink);
+    border-color: var(--unverified-mid);
+  }
 `;
 
 /**
@@ -612,6 +876,7 @@ export function renderInspectPage(
   reports: readonly InspectReportView[],
   pageNotice: string | null = null,
   conflicts: readonly InspectConflictView[] = [],
+  facts: readonly InspectFactView[] = [],
 ): string {
   // Interpolated, not spliced into the finished document by the caller: a
   // String.replace() on the rendered page would treat `$&` in the note as a
@@ -634,8 +899,20 @@ export function renderInspectPage(
           and appears only in the red section for its source — a dropped claim is never
           shown to a user anywhere else in the product.
         </p>
+        ${/* Reading order, chosen for the reader and not for a test:
+             counts -> the disagreement -> why the timeline looks like that ->
+             the raw per-source evidence. The two reconciled sections belong
+             together and above the per-source blocks, because the blocks are
+             an appendix: full transcripts and every kept/dropped row, which a
+             reviewer scrolls into only once a derived claim looks wrong. The
+             timeline sits directly under the conflict it explains — the
+             question "why are only three of the four furosemide claims in
+             that conflict?" is answered by the struck-through March period,
+             and burying it below four transcript dumps meant nobody ever
+             connected the two. */ ''}
         ${renderSummaryBar(reports, conflicts)}
         ${renderConflictsSection(conflicts)}
+        ${renderFactsSection(facts)}
         ${reports.map(renderSource).join('')}`;
 
   return `<!doctype html>
