@@ -11,11 +11,21 @@ const createClient = vi.fn();
 
 vi.mock('@supabase/supabase-js', () => ({ createClient }));
 
+// vi.mock factories are hoisted above every import in this file, so the
+// mock function must come from vi.hoisted() (see
+// components/data/__tests__/care-access.test.ts).
+const { getSessionUserId } = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
+vi.mock('@/components/data/careAccess', () => ({ getSessionUserId }));
+
 describe('demo routes', () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
     createClient.mockReset();
+    getSessionUserId.mockReset();
+    // Default: no current session — every existing test below keeps
+    // resolving the carer id from env/derived exactly as before.
+    getSessionUserId.mockResolvedValue(null);
     vi.resetModules();
   });
 
@@ -153,5 +163,121 @@ describe('demo routes', () => {
 
     expect(res.status).toBe(503); // guard passed; env check is what fails now
     expect(createClient).not.toHaveBeenCalled();
+  });
+
+  describe('carer member id precedence: session uid > env override > derived default', () => {
+    function stubClient(): Array<{ table: string; rows: unknown }> {
+      const calls: Array<{ table: string; rows: unknown }> = [];
+      // `delete()` returns a thenable query builder — resetPlan/deletePlan
+      // issue deletes ahead of the upserts this suite actually asserts on.
+      const deleteQuery = {
+        eq: () => deleteQuery,
+        in: () => deleteQuery,
+        then: (resolve: (v: { error: null }) => void) => resolve({ error: null }),
+      };
+      createClient.mockReturnValue({
+        from: (table: string) => ({
+          upsert: (rows: unknown) => {
+            calls.push({ table, rows });
+            return Promise.resolve({ error: null });
+          },
+          delete: () => deleteQuery,
+        }),
+      });
+      return calls;
+    }
+
+    it('seed: uses the current session uid as the carer member id when a session is held', async () => {
+      process.env = {
+        ...process.env,
+        NODE_ENV: 'test',
+        NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'super-secret-service-key',
+        DEMO_CARER_MEMBER_ID: '77777777-7777-4777-8777-777777777777',
+      };
+      getSessionUserId.mockResolvedValue('99999999-9999-4999-8999-999999999999');
+      const calls = stubClient();
+
+      const { GET } = await import('../../seed/route');
+      const res = await GET();
+      expect(res.status).toBe(200);
+
+      const careRel = calls.find((c) => c.table === 'care_relationships');
+      expect(careRel?.rows).toEqual([
+        expect.objectContaining({ member_id: '99999999-9999-4999-8999-999999999999' }),
+      ]);
+    });
+
+    it('seed: falls back to DEMO_CARER_MEMBER_ID when there is no current session', async () => {
+      process.env = {
+        ...process.env,
+        NODE_ENV: 'test',
+        NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'super-secret-service-key',
+        DEMO_CARER_MEMBER_ID: '77777777-7777-4777-8777-777777777777',
+      };
+      getSessionUserId.mockResolvedValue(null);
+      const calls = stubClient();
+
+      const { GET } = await import('../../seed/route');
+      const res = await GET();
+      expect(res.status).toBe(200);
+
+      const careRel = calls.find((c) => c.table === 'care_relationships');
+      expect(careRel?.rows).toEqual([
+        expect.objectContaining({ member_id: '77777777-7777-4777-8777-777777777777' }),
+      ]);
+    });
+
+    it('reset: falls back to the derived default when there is no session and no env override', async () => {
+      process.env = {
+        ...process.env,
+        NODE_ENV: 'test',
+        NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'super-secret-service-key',
+      };
+      delete process.env.DEMO_CARER_MEMBER_ID;
+      getSessionUserId.mockResolvedValue(null);
+      const calls = stubClient();
+
+      const { GET } = await import('../../reset/route');
+      const res = await GET();
+      expect(res.status).toBe(200);
+
+      const careRel = calls.find((c) => c.table === 'care_relationships');
+      // Not the session uid and not the (unset) env value — the
+      // deterministic uuid demoCarer() derives on its own. Asserted via
+      // stringMatching rather than an `as` cast off the `unknown` rows.
+      expect(careRel?.rows).toEqual([
+        expect.objectContaining({
+          member_id: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+          ),
+        }),
+      ]);
+    });
+
+    it('a getSessionUserId() rejection (no request scope) is treated as no session, not a route failure', async () => {
+      process.env = {
+        ...process.env,
+        NODE_ENV: 'test',
+        NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'super-secret-service-key',
+        DEMO_CARER_MEMBER_ID: '77777777-7777-4777-8777-777777777777',
+      };
+      getSessionUserId.mockRejectedValue(
+        new Error('`cookies` was called outside a request scope'),
+      );
+      const calls = stubClient();
+
+      const { GET } = await import('../../seed/route');
+      const res = await GET();
+      expect(res.status).toBe(200);
+
+      const careRel = calls.find((c) => c.table === 'care_relationships');
+      expect(careRel?.rows).toEqual([
+        expect.objectContaining({ member_id: '77777777-7777-4777-8777-777777777777' }),
+      ]);
+    });
   });
 });

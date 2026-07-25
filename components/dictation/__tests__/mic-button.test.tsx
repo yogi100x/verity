@@ -10,7 +10,10 @@
  *  - a denied permission never calls fetch (nothing was recorded, honestly);
  *  - an unsupported browser disables the button with the reason visible;
  *  - a failed upload says so, and never claims the recording was saved;
- *  - the microphone is released (every track stopped) once recording ends.
+ *  - the microphone is released (every track stopped) once recording ends;
+ *  - no session, no upload: when ensureAnonSession() resolves false, the
+ *    recording ends in the same honest failed copy and fetch is never
+ *    called (the route 401s without a held session anyway).
  */
 
 import "@testing-library/jest-dom/vitest";
@@ -23,6 +26,12 @@ import {
   MIC_START_LABEL,
   MIC_STOP_LABEL,
 } from "@/lib/copy/dictation";
+
+// vi.mock factories are hoisted above every import in this file, including
+// the static import below, so the mock function must come from
+// vi.hoisted() (see components/data/__tests__/supabase-browser.test.ts).
+const { ensureAnonSession } = vi.hoisted(() => ({ ensureAnonSession: vi.fn() }));
+vi.mock("@/components/data/supabaseBrowser", () => ({ ensureAnonSession }));
 
 const PERSON_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -114,6 +123,10 @@ beforeEach(() => {
   recorderInstances = [];
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
+  // Default: a session is already held, so every existing test below still
+  // reaches the network call unchanged.
+  ensureAnonSession.mockReset();
+  ensureAnonSession.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -269,6 +282,26 @@ describe("MicButton", () => {
     expect(screen.queryByText(DICTATION_STATES.saved)).not.toBeInTheDocument();
   });
 
+  it("shows the failed copy and never calls fetch when no session can be established", async () => {
+    ensureAnonSession.mockResolvedValue(false);
+    const { grantMic } = installSupportedBrowser();
+
+    render(<MicButton personId={PERSON_ID} />);
+    fireEvent.click(screen.getByRole("button", { name: MIC_START_LABEL }));
+
+    await grantMic();
+
+    await waitFor(() => {
+      expect(screen.getAllByText(DICTATION_STATES.recording).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: MIC_STOP_LABEL }));
+
+    expect((await screen.findAllByText(DICTATION_ERRORS.failed)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(DICTATION_STATES.saved)).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("announces every state through one persistent live region and politely restores focus", async () => {
     const { grantMic } = installSupportedBrowser();
     fetchMock.mockResolvedValue({
@@ -330,6 +363,13 @@ describe("MicButton", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: MIC_STOP_LABEL }));
+
+    // The hook awaits ensureAnonSession() before fetch, so the request
+    // itself starts a tick later than the click — wait for it to actually
+    // be in flight (and resolveUpload captured) before moving focus.
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
 
     // While the upload is in flight, the user focuses another field.
     const elsewhere = screen.getByRole("textbox", { name: "Elsewhere" });

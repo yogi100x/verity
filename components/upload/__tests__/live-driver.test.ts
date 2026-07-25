@@ -13,12 +13,21 @@
  *  - a 413 (or any non-2xx) ends in the existing honest failed label, with
  *    the server's own error string carried in partialNote, never inlined
  *    into statusLabel;
- *  - a network throw ends in the same failed label.
+ *  - a network throw ends in the same failed label;
+ *  - ensureAnonSession() is awaited before the fetch, and a false result
+ *    fails the item with a fixed note and never calls fetch at all — the
+ *    live route 401s without a held session, so there is nothing to post.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLiveDriver } from "@/components/upload/liveDriver";
 import { STAGE_LABELS, type UploadItem } from "@/components/upload/useUploadSimulation";
+
+// vi.mock factories are hoisted above every import in this file, including
+// the static import below, so the mock function must come from
+// vi.hoisted() (see components/data/__tests__/supabase-browser.test.ts).
+const { ensureAnonSession } = vi.hoisted(() => ({ ensureAnonSession: vi.fn() }));
+vi.mock("@/components/data/supabaseBrowser", () => ({ ensureAnonSession }));
 
 const PERSON_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -33,6 +42,10 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
+  // Default: a session is already held, so every existing happy/error-path
+  // test below still exercises the network call unchanged.
+  ensureAnonSession.mockReset();
+  ensureAnonSession.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -216,5 +229,41 @@ describe("createLiveDriver", () => {
     expect(lastB?.stage).toBe("done");
     expect(lastB?.claimCount).toBe(2);
     expect(lastB?.statusLabel).toBe(STAGE_LABELS.done(2));
+  });
+
+  it("awaits ensureAnonSession() before the fetch on the happy path", async () => {
+    const order: string[] = [];
+    ensureAnonSession.mockImplementation(async () => {
+      order.push("ensureAnonSession");
+      return true;
+    });
+    fetchMock.mockImplementation(async () => {
+      order.push("fetch");
+      return jsonResponse(200, {
+        mode: "live",
+        reports: [{ claims: [{}], notice: null, degraded: false }],
+        drops: 0,
+        persisted: { source_id: "src-1", claims: 1, facts: 1 },
+      });
+    });
+
+    const driver = createLiveDriver(PERSON_ID);
+    await driver(file(), () => {});
+
+    expect(order).toEqual(["ensureAnonSession", "fetch"]);
+  });
+
+  it("fails the item with a fixed note and never calls fetch when no session can be established", async () => {
+    ensureAnonSession.mockResolvedValue(false);
+
+    const patches: ReportPatch[] = [];
+    const driver = createLiveDriver(PERSON_ID);
+    await driver(file(), (patch) => patches.push(patch));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const last = patches[patches.length - 1];
+    expect(last?.stage).toBe("failed");
+    expect(last?.statusLabel).toBe(STAGE_LABELS.failed);
+    expect(last?.partialNote).toBe("Could not sign in. Nothing was saved.");
   });
 });

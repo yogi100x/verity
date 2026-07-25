@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import type { Claim } from '@/lib/contracts';
+import { Conflict, type Claim, type Source } from '@/lib/contracts';
 import { reconcile } from '@/lib/ai/reconcile';
 import type { ExtractionReport } from '@/lib/ai/extract';
 
@@ -14,6 +14,14 @@ vi.mock('@supabase/supabase-js', () => ({ createClient }));
 
 const { resolveMode } = vi.hoisted(() => ({ resolveMode: vi.fn() }));
 vi.mock('@/lib/modes', () => ({ resolveMode }));
+
+// `checkCareAccess` is a shared helper another lane owns the implementation
+// of (`@/components/data/careAccess`) — mocked here against its frozen
+// interface so this file never depends on its internals (cookies, RLS,
+// `care_relationships`). Defaults to `granted` so every pre-existing test in
+// this file keeps passing unmodified.
+const { checkCareAccess } = vi.hoisted(() => ({ checkCareAccess: vi.fn() }));
+vi.mock('@/components/data/careAccess', () => ({ checkCareAccess }));
 
 // Only `extractSourceLive` is mocked (the model seam) — `extractFromFixtures`
 // and `toWireReport` stay the REAL implementations via importOriginal, so
@@ -34,6 +42,12 @@ const PERSON_ID = '11111111-1111-1111-1111-111111111111';
  *  Zod rather than cast (`as` is banned repo-wide; unknown + parse is the
  *  prescribed pattern). */
 const InsertRows = z.array(z.record(z.string(), z.unknown()));
+
+/** Narrow view of a `facts` insert row, just the field the conflict-linkage
+ *  assertions below need — parsed rather than picked off the generic
+ *  `InsertRows` shape so `conflict_id` is a typed `string | null`, not
+ *  `unknown`. */
+const FactConflictLinkRows = z.array(z.object({ conflict_id: z.string().uuid().nullable() }));
 
 /* ============================ multipart helpers ============================
  * jsdom's File/FormData hangs when a File is attached to a FormData and sent
@@ -176,14 +190,90 @@ function buildCannedReport(sourceId: string): ExtractionReport {
   };
 }
 
+/** The one-entry source map the reconcile helpers below need — the Map's
+ *  type arguments come from `reconcile`'s own `sourcesById` parameter shape,
+ *  so `'pdf'` narrows to `SourceKind` contextually, no cast. */
+function sourceMapFor(sourceId: string): ReadonlyMap<string, Pick<Source, 'kind' | 'title'>> {
+  return new Map<string, Pick<Source, 'kind' | 'title'>>([
+    [sourceId, { kind: 'pdf', title: TITLE }],
+  ]);
+}
+
 /** Facts `reconcile` derives from the canned report's kept claims, for one
  *  source — computed the same way the route computes them, so a count
  *  assertion never hardcodes a number that could drift from the real logic. */
 function expectedFactsFor(sourceId: string): number {
   const { kept } = buildCannedReport(sourceId);
-  return reconcile(kept, PERSON_ID, {
-    sourcesById: new Map([[sourceId, { kind: 'pdf' as const, title: TITLE }]]),
-  }).facts.length;
+  return reconcile(kept, PERSON_ID, { sourcesById: sourceMapFor(sourceId) }).facts.length;
+}
+
+/**
+ * A report whose two kept claims are engineered to reconcile into exactly
+ * one `Conflict`: same ontology_key/subject group ("medication"/"furosemide"),
+ * one asserting the drug stopped (`lib/ai/conflict.ts`'s STOPPED_STEMS
+ * matches "stopped"), the other asserting it continues (CONTINUING_STEMS
+ * matches "Continues"/"taking"). `reconcile` runs for REAL in this file (only
+ * `extractSourceLive` is mocked), so this exercises the actual detection
+ * vocabulary rather than a stubbed conflict.
+ *
+ * `asserted_at: null` on both claims is deliberate: `buildFacts`
+ * (`lib/ai/facts.ts`) can only open a validity period from a claim with a
+ * concrete date, so with no date on either claim no period opens and
+ * `applySupersession` has nothing to close — the conflict this test crafts
+ * cannot be silently swallowed by supersession before `detectConflicts` ever
+ * sees it.
+ */
+function buildConflictingReport(sourceId: string): ExtractionReport {
+  const kept: Claim[] = [
+    {
+      id: '30000000-0000-0000-0000-000000000001',
+      source_id: sourceId,
+      ontology_key: 'medication',
+      subject: 'furosemide',
+      value: 'Furosemide 40mg stopped',
+      quote: 'Furosemide 40mg stopped on discharge.',
+      locator: { page: 1, char_start: 0, char_end: 38, ms_start: null, ms_end: null },
+      asserted_at: null,
+      date_precision: 'unknown',
+      provenance: 'document_extracted',
+      verified_substring: true,
+    },
+    {
+      id: '30000000-0000-0000-0000-000000000002',
+      source_id: sourceId,
+      ontology_key: 'medication',
+      subject: 'furosemide',
+      value: 'Continues taking furosemide 40mg daily',
+      quote: 'Continues taking furosemide 40mg daily per GP.',
+      locator: { page: 1, char_start: 39, char_end: 87, ms_start: null, ms_end: null },
+      asserted_at: null,
+      date_precision: 'unknown',
+      provenance: 'document_extracted',
+      verified_substring: true,
+    },
+  ];
+
+  return {
+    source: { id: sourceId, title: TITLE, kind: 'pdf' },
+    transcript:
+      'Furosemide 40mg stopped on discharge. Continues taking furosemide 40mg daily per GP.',
+    kept,
+    dropped: [],
+    stats: { claims_extracted: 2, claims_dropped: 0 },
+    usage: null,
+    mode: 'live',
+    retried: false,
+    degraded: false,
+    notice: null,
+  };
+}
+
+/** The real `reconcile` result for `buildConflictingReport`'s claims, for a
+ *  given source id — computed rather than hardcoded so the test can assert
+ *  against the actual detector's output. */
+function reconcileConflictingReport(sourceId: string) {
+  const { kept } = buildConflictingReport(sourceId);
+  return reconcile(kept, PERSON_ID, { sourcesById: sourceMapFor(sourceId) });
 }
 
 /* ============================ live client mock ============================ */
@@ -192,6 +282,7 @@ interface LiveClientOpts {
   readonly uploadResult?: { data: unknown; error: unknown };
   readonly sourceInsertResult?: { data: unknown; error: unknown };
   readonly claimsInsertResult?: { error: unknown };
+  readonly conflictsUpsertResult?: { error: unknown };
   readonly factsInsertResult?: { error: unknown };
 }
 
@@ -223,29 +314,48 @@ function installLiveClient(opts?: LiveClientOpts) {
 
   const claimsInsert = vi.fn().mockResolvedValue(opts?.claimsInsertResult ?? { error: null });
   const factsInsert = vi.fn().mockResolvedValue(opts?.factsInsertResult ?? { error: null });
+  const conflictsUpsert = vi.fn().mockResolvedValue(opts?.conflictsUpsertResult ?? { error: null });
 
   const eq = vi.fn().mockResolvedValue({ error: null });
   const del = vi.fn().mockReturnValue({ eq });
+
+  const conflictsIn = vi.fn().mockResolvedValue({ error: null });
+  const conflictsDel = vi.fn().mockReturnValue({ in: conflictsIn });
 
   const dbFrom = vi.fn((table: string) => {
     if (table === 'sources') return { insert: sourcesInsert, delete: del };
     if (table === 'claims') return { insert: claimsInsert };
     if (table === 'facts') return { insert: factsInsert };
+    if (table === 'claim_conflicts') return { upsert: conflictsUpsert, delete: conflictsDel };
     throw new Error(`installLiveClient: unexpected table "${table}"`);
   });
 
   createClient.mockReturnValue({ storage: { from: storageFrom }, from: dbFrom });
 
-  return { upload, remove, storageFrom, sourcesInsert, claimsInsert, factsInsert, del, eq, dbFrom };
+  return {
+    upload,
+    remove,
+    storageFrom,
+    sourcesInsert,
+    claimsInsert,
+    factsInsert,
+    conflictsUpsert,
+    conflictsDel,
+    conflictsIn,
+    del,
+    eq,
+    dbFrom,
+  };
 }
 
 /** Pull the minted source id back out of whatever the sources insert was
  *  called with — the one place the route's fresh `randomUUID()` becomes
  *  observable from outside. */
 function capturedSourceId(sourcesInsert: ReturnType<typeof vi.fn>): string {
-  const payload = sourcesInsert.mock.calls[0]?.[0] as { id?: unknown } | undefined;
-  expect(typeof payload?.id).toBe('string');
-  return payload!.id as string;
+  const parsed = z.object({ id: z.string() }).safeParse(sourcesInsert.mock.calls[0]?.[0]);
+  expect(parsed.success).toBe(true);
+  if (!parsed.success) throw new Error('sources insert payload had no string id');
+  return parsed.data.id;
 }
 
 describe('POST /api/extract — live persistence', () => {
@@ -258,6 +368,8 @@ describe('POST /api/extract — live persistence', () => {
     extractSourceLive.mockImplementation(async (source: { id: string }) =>
       buildCannedReport(source.id),
     );
+    checkCareAccess.mockReset();
+    checkCareAccess.mockResolvedValue({ kind: 'granted', memberId: '99999999-9999-9999-9999-999999999999' });
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
@@ -288,11 +400,15 @@ describe('POST /api/extract — live persistence', () => {
 
     expect(createClient).not.toHaveBeenCalled();
     expect(extractSourceLive).not.toHaveBeenCalled();
+    // Mode parity for the access check too: fixtures/replay demands no
+    // session, so the care-access seam must not even be consulted.
+    expect(checkCareAccess).not.toHaveBeenCalled();
   });
 
   it('live happy path: uploads to "documents", inserts sources/claims/facts, and returns the additive persisted field', async () => {
     resolveMode.mockReturnValue('live');
-    const { upload, storageFrom, sourcesInsert, claimsInsert, factsInsert } = installLiveClient();
+    const { upload, storageFrom, sourcesInsert, claimsInsert, factsInsert, conflictsUpsert } =
+      installLiveClient();
 
     const res = await POST(
       multipartRequest('http://localhost/api/extract?mode=live', [
@@ -356,11 +472,226 @@ describe('POST /api/extract — live persistence', () => {
     const factsPayload = InsertRows.parse(factsInsert.mock.calls[0]?.[0]);
     expect(factsPayload).toHaveLength(expectedFacts);
 
+    // The canned report's two kept claims are in different ontology_key/
+    // subject groups (medication/furosemide vs wellbeing/mood) — no
+    // conflict is possible, so this is also the zero-conflict case.
+    expect(conflictsUpsert).not.toHaveBeenCalled();
+
     expect(body.persisted).toEqual({
       source_id: sourceId,
       claims: 2,
       facts: expectedFacts,
+      conflicts: 0,
     });
+  });
+
+  it('conflict persistence: detected conflicts are upserted before facts, and facts cite them via conflict_id', async () => {
+    resolveMode.mockReturnValue('live');
+    extractSourceLive.mockImplementation(async (source: { id: string }) =>
+      buildConflictingReport(source.id),
+    );
+    const { claimsInsert, factsInsert, conflictsUpsert, sourcesInsert } = installLiveClient();
+
+    const res = await POST(
+      multipartRequest('http://localhost/api/extract?mode=live', [
+        fileField(pdfBytes()),
+        { name: 'person_id', data: PERSON_ID },
+      ]),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    const sourceId = capturedSourceId(sourcesInsert);
+    const expected = reconcileConflictingReport(sourceId);
+    // Sanity on the fixture itself: the crafted claims must actually produce
+    // a conflict, or the rest of this test would be vacuously true.
+    expect(expected.conflicts.length).toBeGreaterThan(0);
+
+    // Order is load-bearing: claims -> claim_conflicts -> facts, since a
+    // fact's conflict_id points at a conflict row.
+    expect(claimsInsert.mock.invocationCallOrder[0]).toBeLessThan(
+      conflictsUpsert.mock.invocationCallOrder[0],
+    );
+    expect(conflictsUpsert.mock.invocationCallOrder[0]).toBeLessThan(
+      factsInsert.mock.invocationCallOrder[0],
+    );
+
+    expect(conflictsUpsert).toHaveBeenCalledTimes(1);
+    const conflictsCall = conflictsUpsert.mock.calls[0];
+    expect(conflictsCall?.[1]).toEqual({ onConflict: 'id' });
+
+    // Zod-validated against the real Conflict contract, not cast.
+    const conflictsPayload = z.array(Conflict).parse(conflictsCall?.[0]);
+    expect(conflictsPayload).toHaveLength(expected.conflicts.length);
+    // NOTE: `conflict.id` is minted fresh by `randomUUID()` inside
+    // `detectConflicts` on every call — `expected` above comes from a SEPARATE
+    // `reconcile` call than the one the route itself made, so its ids will
+    // never match the route's. What IS deterministic across both calls is
+    // which claim ids each conflict names (`buildConflictingReport`'s two
+    // claim ids are fixed literals), so that — not the conflict id — is what
+    // ties this payload back to the fixture.
+    const { kept } = buildConflictingReport(sourceId);
+    const expectedClaimIds = kept.map((c) => c.id).sort();
+    const upsertedIds = new Set(conflictsPayload.map((c) => c.id));
+    for (const row of conflictsPayload) {
+      expect(row.person_id).toBe(PERSON_ID);
+      expect(row.ontology_key).toBe('medication');
+      expect(row.subject).toBe('furosemide');
+      expect([...row.claim_ids].sort()).toEqual(expectedClaimIds);
+      expect(row.resolution).toBe('unresolved');
+    }
+
+    const factsPayload = FactConflictLinkRows.parse(factsInsert.mock.calls[0]?.[0]);
+    const factsWithConflict = factsPayload.filter(
+      (f): f is { conflict_id: string } => f.conflict_id !== null,
+    );
+    expect(factsWithConflict.length).toBeGreaterThan(0);
+    for (const fact of factsWithConflict) {
+      expect(upsertedIds.has(fact.conflict_id)).toBe(true);
+    }
+
+    expect(body.persisted).toEqual({
+      source_id: sourceId,
+      claims: 2,
+      facts: expected.facts.length,
+      conflicts: expected.conflicts.length,
+    });
+  });
+
+  it('facts insert failure with a detected conflict: the claim_conflicts rows just written are deleted by id, alongside the existing source/blob cleanup', async () => {
+    resolveMode.mockReturnValue('live');
+    extractSourceLive.mockImplementation(async (source: { id: string }) =>
+      buildConflictingReport(source.id),
+    );
+    const { sourcesInsert, conflictsUpsert, conflictsIn, del, eq, remove } = installLiveClient({
+      factsInsertResult: { error: { message: 'facts insert violated a constraint' } },
+    });
+
+    const res = await POST(
+      multipartRequest('http://localhost/api/extract?mode=live', [
+        fileField(pdfBytes()),
+        { name: 'person_id', data: PERSON_ID },
+      ]),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.persisted).toBeNull();
+    expect(typeof body.persist_notice).toBe('string');
+
+    expect(conflictsUpsert).toHaveBeenCalled();
+    const insertedIds = z
+      .array(Conflict)
+      .parse(conflictsUpsert.mock.calls[0]?.[0])
+      .map((c) => c.id);
+    expect(insertedIds.length).toBeGreaterThan(0);
+
+    // The orphan cleanup this test exists to prove: claim_conflicts does not
+    // cascade off sources (it references people), so it needs its own delete.
+    expect(conflictsIn).toHaveBeenCalledWith('id', insertedIds);
+
+    // Existing cleanup still happens alongside it.
+    const sourceId = capturedSourceId(sourcesInsert);
+    expect(del).toHaveBeenCalled();
+    expect(eq).toHaveBeenCalledWith('id', sourceId);
+    expect(remove).toHaveBeenCalled();
+  });
+
+  it('claim_conflicts upsert failure: source row + orphan blob are cleaned up, no facts are written, and the response is a 200 honest degrade', async () => {
+    resolveMode.mockReturnValue('live');
+    extractSourceLive.mockImplementation(async (source: { id: string }) =>
+      buildConflictingReport(source.id),
+    );
+    const { sourcesInsert, conflictsUpsert, conflictsIn, factsInsert, del, eq, remove } =
+      installLiveClient({
+        conflictsUpsertResult: { error: { message: 'claim_conflicts upsert violated a constraint' } },
+      });
+
+    const res = await POST(
+      multipartRequest('http://localhost/api/extract?mode=live', [
+        fileField(pdfBytes()),
+        { name: 'person_id', data: PERSON_ID },
+      ]),
+    );
+
+    // Honest degrade: the caller still gets its extraction report, but nothing
+    // was stored and the notice says so.
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.persisted).toBeNull();
+    expect(typeof body.persist_notice).toBe('string');
+    expect(body.persist_notice).toContain('was not stored');
+
+    expect(conflictsUpsert).toHaveBeenCalled();
+
+    // The upsert failed, so NOTHING was inserted into claim_conflicts — there
+    // is nothing to delete by id, and the facts insert must never run.
+    expect(conflictsIn).not.toHaveBeenCalled();
+    expect(factsInsert).not.toHaveBeenCalled();
+
+    // The source row (cascading to its claims) and the orphan blob ARE torn
+    // down — the cleanup this failure path is responsible for.
+    const sourceId = capturedSourceId(sourcesInsert);
+    expect(del).toHaveBeenCalled();
+    expect(eq).toHaveBeenCalledWith('id', sourceId);
+    expect(remove).toHaveBeenCalled();
+  });
+
+  it('live mode: no session -> 401 exact body, and no model spend / no storage client at all', async () => {
+    resolveMode.mockReturnValue('live');
+    checkCareAccess.mockResolvedValue({ kind: 'no_session' });
+
+    const res = await POST(
+      multipartRequest('http://localhost/api/extract?mode=live', [
+        fileField(pdfBytes()),
+        { name: 'person_id', data: PERSON_ID },
+      ]),
+    );
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body).toEqual({ error: 'Sign-in required. Nothing was saved.' });
+    expect(extractSourceLive).not.toHaveBeenCalled();
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it('live mode: no access to this care record -> 403 exact body, and no model spend', async () => {
+    resolveMode.mockReturnValue('live');
+    checkCareAccess.mockResolvedValue({ kind: 'no_access' });
+
+    const res = await POST(
+      multipartRequest('http://localhost/api/extract?mode=live', [
+        fileField(pdfBytes()),
+        { name: 'person_id', data: PERSON_ID },
+      ]),
+    );
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body).toEqual({
+      error: 'This account does not have access to this care record. Nothing was saved.',
+    });
+    expect(extractSourceLive).not.toHaveBeenCalled();
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it('live mode: access checks unconfigured -> 500 exact body, and no model spend', async () => {
+    resolveMode.mockReturnValue('live');
+    checkCareAccess.mockResolvedValue({ kind: 'unconfigured' });
+
+    const res = await POST(
+      multipartRequest('http://localhost/api/extract?mode=live', [
+        fileField(pdfBytes()),
+        { name: 'person_id', data: PERSON_ID },
+      ]),
+    );
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body).toEqual({ error: 'Access checks are not configured. Nothing was saved.' });
+    expect(extractSourceLive).not.toHaveBeenCalled();
+    expect(createClient).not.toHaveBeenCalled();
   });
 
   it('live mode: missing person_id -> 400, and the model seam is never called', async () => {
@@ -440,7 +771,7 @@ describe('POST /api/extract — live persistence', () => {
     // The blob was uploaded before the row insert failed, so it must be
     // removed — the one place orphan-blob cleanup runs. Removed at exactly the
     // path it was uploaded to.
-    const uploadedPath = upload.mock.calls[0]?.[0] as string;
+    const uploadedPath = z.string().parse(upload.mock.calls[0]?.[0]);
     expect(sourcesInsert).toHaveBeenCalled();
     expect(remove).toHaveBeenCalledWith([uploadedPath]);
     // Nothing downstream of the failed source row runs.
@@ -510,9 +841,10 @@ describe('POST /api/extract — live persistence', () => {
     );
 
     expect(res.status).toBe(200);
-    const payload = sourcesInsert.mock.calls[0]?.[0] as { title?: unknown };
-    expect(typeof payload.title).toBe('string');
-    const storedTitle = payload.title as string;
+    const payload = z.object({ title: z.string() }).safeParse(sourcesInsert.mock.calls[0]?.[0]);
+    expect(payload.success).toBe(true);
+    if (!payload.success) throw new Error('sources insert payload had no string title');
+    const storedTitle = payload.data.title;
     expect(storedTitle.length).toBe(200);
     expect(storedTitle).toBe('x'.repeat(200)); // trimmed of surrounding whitespace, then capped
   });

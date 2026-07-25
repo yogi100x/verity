@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import { MicButton } from "@/components/dictation/MicButton";
 import { DropZone } from "@/components/upload/DropZone";
 import { FileProgressList } from "@/components/upload/FileProgressList";
 import { createLiveDriver } from "@/components/upload/liveDriver";
 import { UploadSummary } from "@/components/upload/UploadSummary";
+import { ensureAnonSession } from "@/components/data/supabaseBrowser";
 import { simulatedUploadDriver, useUploadSimulation } from "@/components/upload/useUploadSimulation";
 import { useVoice } from "@/components/voice/VoiceProvider";
 import { DICTATION_PROMPT } from "@/lib/copy/dictation";
@@ -33,6 +35,21 @@ import type { Mode } from "@/lib/modes";
  */
 export function UploadView({ personId, mode }: { personId: string; mode?: Mode }) {
   const { voice, displayName } = useVoice();
+
+  // Establish (or reuse) the anonymous session the moment the live screen
+  // mounts, not first at upload time. A demo seed run from this browser
+  // attaches its care_relationships grant to the CURRENT session's uid
+  // (app/demo/_lib/handler.ts) — if no session exists until the first
+  // upload, a seed run before that grants the env/derived fallback uid and
+  // every later upload 403s until a re-seed. Fire-and-forget: the upload
+  // and dictation paths still call ensureAnonSession() themselves and
+  // handle a false result with their own honest failure copy.
+  useEffect(() => {
+    if (mode === "live") {
+      void ensureAnonSession();
+    }
+  }, [mode]);
+
   const driver = mode === "live" ? createLiveDriver(personId) : simulatedUploadDriver;
   const { items, addFiles, allDone, totalClaims } = useUploadSimulation(driver);
 

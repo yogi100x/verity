@@ -30,6 +30,14 @@ vi.mock("@/components/upload/liveDriver", () => ({
   createLiveDriver: (...args: unknown[]) => createLiveDriverMock(...args),
 }));
 
+// The live screen bootstraps the anonymous session on mount (so a demo seed
+// run from this browser grants THIS session's uid, not the env/derived
+// fallback). Mocked so no real Supabase client is constructed; hoisted
+// because vi.mock factories run above every import in this file (see
+// components/data/__tests__/supabase-browser.test.ts for the pattern).
+const { ensureAnonSession } = vi.hoisted(() => ({ ensureAnonSession: vi.fn() }));
+vi.mock("@/components/data/supabaseBrowser", () => ({ ensureAnonSession }));
+
 // The former default export of app/(app)/upload/page.tsx was a client
 // component and could be rendered directly. It is now an async Server
 // Component (it reads the active case to hand UploadView its personId
@@ -57,6 +65,8 @@ function drop(file: File) {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  ensureAnonSession.mockReset();
+  ensureAnonSession.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -170,6 +180,20 @@ describe("UploadView mode selection", () => {
     expect(screen.getByText(/Reading discharge\.pdf/)).toBeInTheDocument();
 
     await tick(STAGE_DELAY_MS * 3);
+  });
+
+  it("bootstraps the anonymous session on mount in live mode, before any upload", () => {
+    // A demo seed grants the CURRENT session's uid — so the session must
+    // exist by the time the user seeds, not first at upload time.
+    createLiveDriverMock.mockReturnValue(() => Promise.resolve());
+    render(<UploadView personId={TEST_PERSON_ID} mode="live" />);
+    expect(ensureAnonSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("never bootstraps a session outside live mode", () => {
+    render(<UploadView personId={TEST_PERSON_ID} mode="fixtures" />);
+    render(<UploadView personId={TEST_PERSON_ID} mode={undefined} />);
+    expect(ensureAnonSession).not.toHaveBeenCalled();
   });
 
   it("surfaces a failed row's server-provided reason (partialNote), not just the generic failed label", async () => {
