@@ -22,7 +22,7 @@ import { callForcedTool, type CallSeamOptions, type CallUsage } from '@/lib/ai/c
 import { EXTRACTION_SYSTEM, EXTRACTION_TOOL } from '@/lib/ai/prompts';
 import { MODELS } from '@/lib/ai/models';
 import { contentBlocksFor, type SourceInput } from '@/lib/ai/documents';
-import { verifyClaim } from '@/lib/ai/verify';
+import { anchorClaim, type AnchorFailure } from '@/lib/ai/verify';
 import type { Mode } from '@/lib/modes';
 import fixtureRaw from '@/fixtures/margaret.json';
 
@@ -39,7 +39,15 @@ export interface RawClaim {
   readonly date_precision: DatePrecision;
 }
 
-export type DropReason = 'quote_not_in_source';
+/**
+ * Every way a claim can be rejected. The last three were added after the
+ * first real live call, when the model padded its output with a claim whose
+ * every field was the letter "x" — and the bare substring check verified it,
+ * because "x" appears in nearly any transcript. See `anchorClaim` in
+ * `lib/ai/verify.ts` for what each check means and the fixture evidence that
+ * none of them drops a genuine claim.
+ */
+export type DropReason = AnchorFailure;
 
 export interface DroppedClaim {
   readonly claim: RawClaim;
@@ -201,11 +209,16 @@ export function partitionClaims(
   const dropped: DroppedClaim[] = [];
 
   for (const [index, rawClaim] of raw.entries()) {
-    if (!verifyClaim({ quote: rawClaim.quote }, source)) {
-      dropped.push({ claim: rawClaim, reason: 'quote_not_in_source' });
+    const failure = anchorClaim(rawClaim, source);
+    if (failure !== null) {
+      dropped.push({ claim: rawClaim, reason: failure });
       continue;
     }
 
+    // `anchorClaim` guarantees the normalised quote occurs exactly once, so
+    // when the exact raw string is found at all, it is found at the right
+    // occurrence — the wrong-occurrence anchoring that plain indexOf allowed
+    // is no longer reachable.
     const located = locateQuote(source.transcript, rawClaim.quote);
 
     const claim: Claim = {
