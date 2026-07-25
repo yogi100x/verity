@@ -81,29 +81,41 @@ describe('RED_FLAG_HALT_CARD', () => {
     expect(RED_FLAG_HALT_CARD.fallback).toContain('We are not');
   });
 
-  it('leaves the OGL-attributed NHS guidance slot explicitly empty rather than fabricating it', () => {
-    // research/01 §6 has *[verbatim NHS 999 guidance text + source link,
-    // OGL-attributed]* as a slot. Empty is the correct shipped state; any
-    // plausible-sounding NHS text here would be a fabricated citation.
-    expect(RED_FLAG_HALT_CARD.nhsGuidanceQuote).toBe('');
-    expect(RED_FLAG_HALT_CARD.nhsGuidanceSourceUrl).toBe('');
+  it('ships the NHS guidance slot filled with text retrieved verbatim from nhs.uk, never generated', () => {
+    // Retrieved 25 July 2026 from the live page below (last reviewed
+    // 3 February 2023). Byte-for-byte pin: any paraphrase, re-wording or
+    // "improvement" fails this test. Refreshing the quote means
+    // re-retrieving it from the URL — never editing the string in place.
+    expect(RED_FLAG_HALT_CARD.nhsGuidanceQuote).toBe(
+      '999 is for life-threatening emergencies like serious road traffic ' +
+        'accidents, strokes and heart attacks.',
+    );
+    expect(RED_FLAG_HALT_CARD.nhsGuidanceSourceUrl).toBe(
+      'https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/when-to-call-999/',
+    );
+    expect(RED_FLAG_HALT_CARD.nhsGuidanceAttribution).toContain('NHS website');
+    expect(RED_FLAG_HALT_CARD.nhsGuidanceAttribution).toContain(
+      'Open Government Licence v3.0',
+    );
   });
 
-  it('invents no NHS attribution, licence text, or source link anywhere on the card', () => {
-    const wholeCard = [
+  it('confines NHS sourcing to the guidance slot — the prose beats carry no links or licence text', () => {
+    const proseBeats = [
       RED_FLAG_HALT_CARD.heading,
       RED_FLAG_HALT_CARD.body,
-      RED_FLAG_HALT_CARD.nhsGuidanceQuote,
-      RED_FLAG_HALT_CARD.nhsGuidanceSourceUrl,
       RED_FLAG_HALT_CARD.primaryAction,
       RED_FLAG_HALT_CARD.fallback,
     ].join(' ');
-    expect(wholeCard.toLowerCase()).not.toContain('open government licence');
-    expect(wholeCard.toLowerCase()).not.toContain('ogl');
-    expect(wholeCard).not.toMatch(/https?:\/\//);
-    expect(wholeCard.toLowerCase()).not.toContain('nhs.uk');
-    // The only NHS references permitted are the two structural beats.
-    expect(wholeCard.match(/NHS/g)).toEqual(["NHS", "NHS"]);
+    expect(proseBeats.toLowerCase()).not.toContain('open government licence');
+    expect(proseBeats.toLowerCase()).not.toContain('ogl');
+    expect(proseBeats).not.toMatch(/https?:\/\//);
+    expect(proseBeats.toLowerCase()).not.toContain('nhs.uk');
+    // The only NHS references in our own prose are the two structural beats.
+    expect(proseBeats.match(/NHS/g)).toEqual(['NHS', 'NHS']);
+    // The quote is NHS prose, not ours — it must not smuggle a link, and the
+    // source URL must point at nhs.uk itself.
+    expect(RED_FLAG_HALT_CARD.nhsGuidanceQuote).not.toMatch(/https?:\/\//);
+    expect(RED_FLAG_HALT_CARD.nhsGuidanceSourceUrl).toMatch(/^https:\/\/www\.nhs\.uk\//);
   });
 
   it('never mentions the old product name', () => {
@@ -159,6 +171,8 @@ describe('copy constants — no judgement or likelihood language', () => {
     RED_FLAG_HALT_CARD_BODY: RED_FLAG_HALT_CARD.body,
     RED_FLAG_HALT_CARD_PRIMARY_ACTION: RED_FLAG_HALT_CARD.primaryAction,
     RED_FLAG_HALT_CARD_FALLBACK: RED_FLAG_HALT_CARD.fallback,
+    RED_FLAG_HALT_CARD_NHS_QUOTE: RED_FLAG_HALT_CARD.nhsGuidanceQuote,
+    RED_FLAG_HALT_CARD_NHS_ATTRIBUTION: RED_FLAG_HALT_CARD.nhsGuidanceAttribution,
     SAFEGUARDING_FOOTER,
   };
 

@@ -51,22 +51,25 @@ export function footer(name: string, date: string): string {
  *
  * research/01 §6 also places an explicit slot between the body and the
  * primary action: *[verbatim NHS 999 guidance text + source link,
- * OGL-attributed]*. That slot is represented below by `nhsGuidanceQuote`
- * and `nhsGuidanceSourceUrl`, and both are deliberately EMPTY. An empty
- * slot is the correct state: the quote may only ever be filled by pasting
- * text retrieved verbatim from NHS.uk together with its source URL and OGL
- * attribution. Writing plausible-sounding NHS guidance here — or any
- * paraphrase, or a model-generated string — is a fabricated citation and
- * the single most damaging failure this module can ship. Renderers must
- * omit the block entirely while the slot is empty.
+ * OGL-attributed]*. That slot is `nhsGuidanceQuote` +
+ * `nhsGuidanceSourceUrl` + `nhsGuidanceAttribution` below. It is filled
+ * with text RETRIEVED VERBATIM from the live NHS.uk page on 25 July 2026
+ * (page last reviewed 3 February 2023). The rule is unchanged: this slot
+ * may only ever hold text pasted verbatim from NHS.uk with its source URL
+ * and OGL attribution. Any paraphrase, re-wording or model-generated
+ * string here is a fabricated citation — the single most damaging failure
+ * this module can ship. To refresh it, re-retrieve from the URL; never
+ * edit the string in place.
  */
 export interface RedFlagHaltCard {
   readonly heading: string;
   readonly body: string;
-  /** Empty until real OGL-attributed NHS.uk text is pasted in. Never generated. */
+  /** Verbatim from NHS.uk. Never generated, never paraphrased. */
   readonly nhsGuidanceQuote: string;
-  /** Empty until the NHS.uk source URL for `nhsGuidanceQuote` is pasted in. */
+  /** The NHS.uk page `nhsGuidanceQuote` was retrieved from. */
   readonly nhsGuidanceSourceUrl: string;
+  /** OGL attribution for the quote. Filled together with it. */
+  readonly nhsGuidanceAttribution: string;
   readonly primaryAction: string;
   readonly fallback: string;
 }
@@ -78,8 +81,15 @@ export const RED_FLAG_HALT_CARD: RedFlagHaltCard = {
     "that need immediate attention. We have not assessed you — we've " +
     "simply stopped, because this isn't something to prepare an " +
     'appointment for.',
-  nhsGuidanceQuote: '',
-  nhsGuidanceSourceUrl: '',
+  nhsGuidanceQuote:
+    '999 is for life-threatening emergencies like serious road traffic ' +
+    'accidents, strokes and heart attacks.',
+  nhsGuidanceSourceUrl:
+    'https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/when-to-call-999/',
+  nhsGuidanceAttribution:
+    'NHS website, "When to call 999", page last reviewed 3 February 2023. ' +
+    'Contains public sector information licensed under the Open Government ' +
+    'Licence v3.0.',
   primaryAction: 'Call 999 now.',
   fallback:
     'Not sure? NHS 111 online can assess this. It is a registered medical ' +
