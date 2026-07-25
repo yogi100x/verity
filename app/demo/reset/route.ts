@@ -15,7 +15,9 @@ import type { NextResponse } from 'next/server';
 import { resetPlan } from '../_lib/dal';
 import { runDemoAction } from '../_lib/handler';
 
-export { dynamic } from '../_lib/handler';
+// Next.js requires segment config to be a literal in the route file itself —
+// a re-export is not statically analysable and fails the build.
+export const dynamic = 'force-dynamic';
 
 async function handle(): Promise<NextResponse> {
   return runDemoAction('reset', (snapshot, templates, carer) =>
