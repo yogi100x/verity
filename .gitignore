@@ -31,3 +31,4 @@ demo/uploads/
 
 # test
 coverage/
+.env*

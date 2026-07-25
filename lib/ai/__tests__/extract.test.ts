@@ -117,11 +117,13 @@ describe('extractFromFixtures', () => {
     expect(reports).toHaveLength(fixture.sources.length);
   });
 
-  it('reproduces the fixture-wide numbers: 17 extracted, 1 dropped', () => {
+  it('reproduces the fixture-wide stats', () => {
+    // Derived, not hardcoded — the fixture gains sources over time (care log,
+    // checklist letter) and this suite must track it, not pin it.
     const totalExtracted = reports.reduce((sum, r) => sum + r.stats.claims_extracted, 0);
     const totalDropped = reports.reduce((sum, r) => sum + r.stats.claims_dropped, 0);
-    expect(totalExtracted).toBe(17);
-    expect(totalDropped).toBe(1);
+    expect(totalExtracted).toBe(fixture.stats.claims_extracted);
+    expect(totalDropped).toBe(fixture.stats.claims_dropped);
   });
 
   it('every report has usage: null, mode: fixtures, retried: false', () => {

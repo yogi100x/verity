@@ -188,15 +188,34 @@ describe('chcDeadlines', () => {
   describe('fixtures/margaret.json', () => {
     const snap = CaseSnapshot.parse(fixture);
 
-    it('records no chc.checklist_date fact', () => {
-      expect(
-        snap.facts.filter((f) => f.ontology_key === 'chc.checklist_date'),
-      ).toEqual([]);
+    // This block was a negative control until the orchestrator seeded the
+    // Checklist outcome letter (source 06) on 25 Jul. It is now a positive
+    // control with the same spirit: exactly one deadline, never more — a
+    // second would be a false positive.
+    it('records exactly one chc.checklist_date fact, cited, dated 10 July 2026', () => {
+      const checklist = snap.facts.filter((f) => f.ontology_key === 'chc.checklist_date');
+      expect(checklist).toHaveLength(1);
+      expect(checklist[0]!.valid_from).toBe('2026-07-10');
+      expect(checklist[0]!.supporting_claim_ids.length).toBeGreaterThan(0);
     });
 
-    it('produces no deadlines — no false positive on the real case', () => {
-      expect(chcDeadlines(snap.facts, new Date('2026-07-25T00:00:00.000Z'))).toEqual([]);
-      expect(chcDeadlines(snap.facts, new Date('2027-01-01T00:00:00.000Z'))).toEqual([]);
+    it('produces exactly one deadline with day-exact arithmetic on the real case', () => {
+      const day15 = chcDeadlines(snap.facts, new Date('2026-07-25T00:00:00.000Z'));
+      expect(day15).toHaveLength(1);
+      expect(day15[0]!.checklist_date).toBe('2026-07-10');
+      expect(day15[0]!.days_elapsed).toBe(15);
+      expect(day15[0]!.timescale_days).toBe(28);
+
+      // Demo day.
+      const day16 = chcDeadlines(snap.facts, new Date('2026-07-26T00:00:00.000Z'));
+      expect(day16[0]!.days_elapsed).toBe(16);
+
+      // Statement and letter stay filter-clean on the real fact, both sides
+      // of the 28-day boundary.
+      for (const now of ['2026-07-26T00:00:00.000Z', '2026-08-20T00:00:00.000Z']) {
+        const [d] = chcDeadlines(snap.facts, new Date(now));
+        expect(filterOutput(wholeLetter(d!), []), now).toEqual({ ok: true });
+      }
     });
   });
 

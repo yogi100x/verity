@@ -27,11 +27,14 @@ describe('seedPlan', () => {
     expect(rowsFor(plan, 'care_relationships').length).toBe(1);
   });
 
-  it('matches the real fixture as of today: 5 sources, 17 claims, 10 facts, 1 conflict, 4 gaps, 2 artifacts', () => {
+  // Deliberate drift alarm: pinned counts force a human decision on every
+  // fixture change. Updated 25 Jul by the orchestrator after seeding the CHC
+  // Checklist letter (source 06 + its claim + the chc.checklist_date fact).
+  it('matches the real fixture as of today: 6 sources, 18 claims, 11 facts, 1 conflict, 4 gaps, 2 artifacts', () => {
     const plan = seedPlan(snapshot, templates);
-    expect(rowsFor(plan, 'sources').length).toBe(5);
-    expect(rowsFor(plan, 'claims').length).toBe(17);
-    expect(rowsFor(plan, 'facts').length).toBe(10);
+    expect(rowsFor(plan, 'sources').length).toBe(6);
+    expect(rowsFor(plan, 'claims').length).toBe(18);
+    expect(rowsFor(plan, 'facts').length).toBe(11);
     expect(rowsFor(plan, 'claim_conflicts').length).toBe(1);
     expect(rowsFor(plan, 'gaps').length).toBe(4);
     expect(rowsFor(plan, 'artifacts').length).toBe(2);

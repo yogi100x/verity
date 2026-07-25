@@ -49,10 +49,14 @@ describe("DashboardView (margaret — carer mode, unchanged)", () => {
     const { stats } = getCase("margaret");
     render(<DashboardView caseId="margaret" />);
 
-    expect(stats.claims_extracted).toBe(17);
-    expect(stats.claims_dropped).toBe(1);
+    // Derived, not hardcoded — the fixture gains sources over time (care log,
+    // checklist letter) and this assertion must track it, not pin it.
     expect(
-      screen.getByText(/17 claims extracted, 1 dropped for unverifiable quotes/),
+      screen.getByText(
+        new RegExp(
+          `${stats.claims_extracted} claims extracted, ${stats.claims_dropped} dropped for unverifiable quotes`,
+        ),
+      ),
     ).toBeInTheDocument();
   });
 
@@ -92,7 +96,6 @@ describe("DashboardView (margaret — carer mode, unchanged)", () => {
     );
     const sum = perSourceVerified.reduce((a, b) => a + b, 0);
     expect(sum).toBe(stats.claims_extracted - stats.claims_dropped);
-    expect(sum).toBe(16);
   });
 
   it("reads third person: the possessive names Margaret, not 'your'", () => {
