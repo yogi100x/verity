@@ -92,7 +92,7 @@ describe('no genuine claim is lost — the fixture is the evidence', () => {
     expect(quoteSupportsClaim(claim)).toBe(true);
   });
 
-  it('partitionClaims still reproduces the fixture stats: 17 extracted, 1 dropped', () => {
+  it('partitionClaims still reproduces the fixture stats — derived, not pinned', () => {
     let kept = 0;
     let droppedCount = 0;
     for (const source of snap.sources) {
@@ -111,8 +111,10 @@ describe('no genuine claim is lost — the fixture is the evidence', () => {
       kept += result.kept.length;
       droppedCount += result.dropped.length;
     }
-    expect(kept).toBe(16);
-    expect(droppedCount).toBe(1);
+    // Derived from fixture.stats — the fixture gains sources over time and
+    // this suite tracks it rather than pinning a moment.
+    expect(kept).toBe(snap.stats.claims_extracted - snap.stats.claims_dropped);
+    expect(droppedCount).toBe(snap.stats.claims_dropped);
   });
 });
 
