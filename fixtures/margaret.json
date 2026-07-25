@@ -479,7 +479,7 @@
       "id": "9a000000-0000-4000-8000-000000000004",
       "person_id": "00000000-0000-4000-8000-000000000001",
       "detector": "referral_without_outcome",
-      "statement": "The discharge summary records that a heart failure specialist nurse would make contact within 2 weeks. No contact is recorded.",
+      "statement": "The discharge summary records that a specialist nurse would make contact within 2 weeks. No contact is recorded.",
       "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000014"],
       "suggested_next_document": "Heart failure nurse contact note"
     }
