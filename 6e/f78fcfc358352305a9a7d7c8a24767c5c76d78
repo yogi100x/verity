@@ -1,0 +1,23 @@
+.husky/pre-commit
+  s_afabf214a6fe93::t_1eca62de1c9aa7 1
+package.json
+  s_afabf214a6fe93::t_1eca62de1c9aa7 9-10,21,27
+pnpm-lock.yaml
+  s_afabf214a6fe93::t_32268804687aa6 48-50,963-967,2059-2060
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "6ef78fcfc358352305a9a7d7c8a24767c5c76d78",
+  "prompts": {},
+  "sessions": {
+    "s_afabf214a6fe93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c999a24-05c7-418e-a055-0e42e33d7f6d",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    }
+  }
+}
