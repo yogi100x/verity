@@ -38,6 +38,8 @@ When the source has pages, set "page" to the 1-indexed page number the quote app
 
 Set "asserted_at" to the date the claim was made or is about, as an ISO date, when the source states or clearly implies one. Otherwise use null and set "date_precision" to "unknown".
 
+Emit only claims the source genuinely makes. If a source contains little or nothing extractable, return few claims or none — never pad the list with placeholder or filler entries. A claim whose subject, value, or quote is a meaningless token will be discarded, and emitting it wastes the space of a real one.
+
 Do not assess, rank, or comment on how serious, urgent, important, or risky anything in the source is. You are not being asked for a clinical judgement of any kind — only for what the document literally says and where. Do not add a severity, urgency, priority, risk, or score of any kind to any claim; there is nowhere for one to go, and any such assessment you produce will be discarded.`;
 
 /**

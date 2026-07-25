@@ -79,12 +79,21 @@ describe('partitionClaims', () => {
     const raw = [
       makeRawClaim(),
       makeRawClaim({ quote: 'this quote does not appear anywhere' }),
+      // A REAL sentence from the transcript attached to a claim it does not
+      // support (the claim asserts furosemide was stopped; the quote says the
+      // patient was reviewed). The original substring check kept this with a
+      // verified badge; the anchoring rules added after the first live call
+      // drop it — which is the point, so this case moved from kept to dropped.
       makeRawClaim({ quote: 'Patient reviewed.' }),
     ];
     const { kept, dropped } = partitionClaims(raw, source);
     expect(kept.length + dropped.length).toBe(raw.length);
-    expect(kept).toHaveLength(2);
-    expect(dropped).toHaveLength(1);
+    expect(kept).toHaveLength(1);
+    expect(dropped).toHaveLength(2);
+    expect(dropped.map((d) => d.reason).sort()).toEqual([
+      'quote_does_not_support_claim',
+      'quote_not_in_source',
+    ]);
   });
 
   it('kept claims parse cleanly against the Claim Zod schema', () => {
