@@ -6,14 +6,26 @@
  * fixtures/*.json, never a raw query. When Lane A lands a real API this file
  * is the only one that changes; nothing downstream should notice.
  *
- * fixtures/margaret.json and fixtures/templates.json are parsed against the
- * frozen contract exactly once, at module load, and cached. Everything below
- * only *derives* views from that parsed snapshot — nothing here mutates it.
+ * fixtures/margaret.json, fixtures/maya.json, and fixtures/templates.json are
+ * parsed against the frozen contract exactly once, at module load, and
+ * cached in `CASE_REGISTRY`. Everything below only *derives* views from a
+ * parsed snapshot — nothing here mutates it.
  *
  * Every view function that resolves a fact/claim/gap/conflict to evidence
  * fails loud (throws) if the reference doesn't resolve. A bare, sourceless
  * statement is the one thing the design system forbids (docs/design.md §10),
  * so it is better to crash in dev than silently render one.
+ *
+ * ---- Active-case selection (stretch S1 — Maya coda) ----
+ *
+ * Every selector below takes an optional trailing `caseId` and defaults to
+ * `'margaret'` when omitted. That default is deliberate and load-bearing:
+ * every call site that existed before this stretch calls these functions
+ * with no `caseId` argument, and must keep resolving to Margaret's case
+ * exactly as before. Server Component pages resolve the *active* case from
+ * the request cookie via `components/data/activeCase.ts` and pass it in
+ * explicitly; nothing in this file reads cookies itself, which is what lets
+ * client components (e.g. the upload flow) keep importing it safely.
  */
 
 import { z } from "zod";
@@ -30,16 +42,44 @@ import {
   type TemplateKey,
 } from "@/lib/contracts";
 import margaretFixture from "../../fixtures/margaret.json";
+import mayaFixture from "../../fixtures/maya.json";
 import templatesFixture from "../../fixtures/templates.json";
 
 /* ============================ module-level parse ============================ */
 
-const CASE: CaseSnapshot = CaseSnapshot.parse(margaretFixture);
-const TEMPLATES: ArtifactTemplate[] = z.array(ArtifactTemplate).parse(templatesFixture);
+/** The set of seeded accounts. Adding a third demo account is one new entry
+ *  in `CASE_REGISTRY` below plus a fixture file — no selector changes. */
+export type CaseId = "margaret" | "maya";
 
-const sourcesById = new Map<string, Source>(CASE.sources.map((s) => [s.id, s]));
-const claimsById = new Map<string, Claim>(CASE.claims.map((c) => [c.id, c]));
-const factsById = new Map<string, Fact>(CASE.facts.map((f) => [f.id, f]));
+export const DEFAULT_CASE_ID: CaseId = "margaret";
+
+type CaseIndex = {
+  snapshot: CaseSnapshot;
+  sourcesById: Map<string, Source>;
+  claimsById: Map<string, Claim>;
+  factsById: Map<string, Fact>;
+};
+
+function buildIndex(raw: unknown): CaseIndex {
+  const snapshot = CaseSnapshot.parse(raw);
+  return {
+    snapshot,
+    sourcesById: new Map(snapshot.sources.map((s) => [s.id, s])),
+    claimsById: new Map(snapshot.claims.map((c) => [c.id, c])),
+    factsById: new Map(snapshot.facts.map((f) => [f.id, f])),
+  };
+}
+
+const CASE_REGISTRY: Record<CaseId, CaseIndex> = {
+  margaret: buildIndex(margaretFixture),
+  maya: buildIndex(mayaFixture),
+};
+
+function indexFor(caseId: CaseId = DEFAULT_CASE_ID): CaseIndex {
+  return CASE_REGISTRY[caseId];
+}
+
+const TEMPLATES: ArtifactTemplate[] = z.array(ArtifactTemplate).parse(templatesFixture);
 
 /* ============================ formatting helpers ============================ */
 
@@ -119,20 +159,20 @@ function formatDayMonth(iso: string): string {
 
 /* ============================ base accessors ============================ */
 
-export function getCase(): CaseSnapshot {
-  return CASE;
+export function getCase(caseId: CaseId = DEFAULT_CASE_ID): CaseSnapshot {
+  return indexFor(caseId).snapshot;
 }
 
 export function getTemplates(): ArtifactTemplate[] {
   return TEMPLATES;
 }
 
-export function getSources(): Source[] {
-  return CASE.sources;
+export function getSources(caseId: CaseId = DEFAULT_CASE_ID): Source[] {
+  return indexFor(caseId).snapshot.sources;
 }
 
-export function getSource(id: string): Source | undefined {
-  return sourcesById.get(id);
+export function getSource(id: string, caseId: CaseId = DEFAULT_CASE_ID): Source | undefined {
+  return indexFor(caseId).sourcesById.get(id);
 }
 
 /* ============================ timeline ============================ */
@@ -155,12 +195,16 @@ export type TimelineEvent = {
   provenance: EventProvenance;
 };
 
-function firstClaimOf(fact: Fact): Claim | undefined {
+function firstClaimOf(fact: Fact, idx: CaseIndex): Claim | undefined {
   const id = fact.supporting_claim_ids[0];
-  return id !== undefined ? claimsById.get(id) : undefined;
+  return id !== undefined ? idx.claimsById.get(id) : undefined;
 }
 
-export function resolveProvenance(fact: Fact, firstClaim: Claim | undefined): EventProvenance {
+export function resolveProvenance(
+  fact: Fact,
+  firstClaim: Claim | undefined,
+  caseId: CaseId = DEFAULT_CASE_ID,
+): EventProvenance {
   if (fact.provenance === "user_stated") {
     if (firstClaim === undefined) {
       throw new Error(
@@ -171,7 +215,7 @@ export function resolveProvenance(fact: Fact, firstClaim: Claim | undefined): Ev
   }
 
   if (firstClaim !== undefined) {
-    const source = sourcesById.get(firstClaim.source_id);
+    const source = indexFor(caseId).sourcesById.get(firstClaim.source_id);
     if (source === undefined) {
       throw new Error(`claim ${firstClaim.id} references unknown source ${firstClaim.source_id}`);
     }
@@ -193,14 +237,14 @@ export function resolveProvenance(fact: Fact, firstClaim: Claim | undefined): Ev
   );
 }
 
-function buildSupersededNote(fact: Fact): string | undefined {
+function buildSupersededNote(fact: Fact, idx: CaseIndex): string | undefined {
   if (fact.superseded_by === null) return undefined;
-  const replacement = factsById.get(fact.superseded_by);
+  const replacement = idx.factsById.get(fact.superseded_by);
   if (replacement === undefined) {
     throw new Error(`fact ${fact.id} superseded_by unknown fact ${fact.superseded_by}`);
   }
-  const replacementClaim = firstClaimOf(replacement);
-  const source = replacementClaim ? sourcesById.get(replacementClaim.source_id) : undefined;
+  const replacementClaim = firstClaimOf(replacement, idx);
+  const source = replacementClaim ? idx.sourcesById.get(replacementClaim.source_id) : undefined;
   const sourceName = source
     ? source.title.charAt(0).toLowerCase() + source.title.slice(1)
     : "a later source";
@@ -213,12 +257,13 @@ function buildSupersededNote(fact: Fact): string | undefined {
  * timeline yet. Every remaining fact resolves to exactly one provenance
  * shape or this throws; see resolveProvenance.
  */
-export function timelineEvents(): TimelineEvent[] {
-  const withSortKey = CASE.facts
+export function timelineEvents(caseId: CaseId = DEFAULT_CASE_ID): TimelineEvent[] {
+  const idx = indexFor(caseId);
+  const withSortKey = idx.snapshot.facts
     .filter((fact) => fact.status !== "unknown")
     .map((fact) => {
-      const firstClaim = firstClaimOf(fact);
-      const provenance = resolveProvenance(fact, firstClaim);
+      const firstClaim = firstClaimOf(fact, idx);
+      const provenance = resolveProvenance(fact, firstClaim, caseId);
       const precision: DatePrecision = firstClaim?.date_precision ?? "unknown";
       const dateISO = fact.valid_from ?? firstClaim?.asserted_at ?? null;
 
@@ -227,7 +272,7 @@ export function timelineEvents(): TimelineEvent[] {
         dateLabel: formatDateLabel(dateISO, precision),
         isApproximate: precision === "approximate",
         superseded: fact.superseded_by !== null,
-        supersededNote: buildSupersededNote(fact),
+        supersededNote: buildSupersededNote(fact, idx),
         provenance,
       };
 
@@ -264,14 +309,15 @@ export type ConflictView = {
   chips: ConflictChip[];
 };
 
-export function conflictViews(): ConflictView[] {
-  return CASE.conflicts.map((conflict) => {
+export function conflictViews(caseId: CaseId = DEFAULT_CASE_ID): ConflictView[] {
+  const idx = indexFor(caseId);
+  return idx.snapshot.conflicts.map((conflict) => {
     const chips = conflict.claim_ids.map((claimId) => {
-      const claim = claimsById.get(claimId);
+      const claim = idx.claimsById.get(claimId);
       if (claim === undefined) {
         throw new Error(`conflict ${conflict.id} references unknown claim ${claimId}`);
       }
-      const source = sourcesById.get(claim.source_id);
+      const source = idx.sourcesById.get(claim.source_id);
       if (source === undefined) {
         throw new Error(`claim ${claim.id} references unknown source ${claim.source_id}`);
       }
@@ -307,18 +353,19 @@ export type GapView = {
   citations: Citation[];
 };
 
-export function gapViews(): GapView[] {
-  return CASE.gaps.map((gap) => ({
+export function gapViews(caseId: CaseId = DEFAULT_CASE_ID): GapView[] {
+  const idx = indexFor(caseId);
+  return idx.snapshot.gaps.map((gap) => ({
     id: gap.id,
     detector: gap.detector,
     statement: gap.statement,
     suggestedNextDocument: gap.suggested_next_document,
     citations: gap.supporting_claim_ids.map((claimId) => {
-      const claim = claimsById.get(claimId);
+      const claim = idx.claimsById.get(claimId);
       if (claim === undefined) {
         throw new Error(`gap ${gap.id} references unknown claim ${claimId}`);
       }
-      const source = sourcesById.get(claim.source_id);
+      const source = idx.sourcesById.get(claim.source_id);
       if (source === undefined) {
         throw new Error(`claim ${claim.id} references unknown source ${claim.source_id}`);
       }
@@ -363,12 +410,16 @@ export type ArtifactView = {
  * hardcoded `if (templateKey === ...)`. Adding a third gatekeeper template is
  * a new object in fixtures/templates.json, not a new branch here.
  */
-export function artifactView(templateKey: TemplateKey): ArtifactView {
+export function artifactView(
+  templateKey: TemplateKey,
+  caseId: CaseId = DEFAULT_CASE_ID,
+): ArtifactView {
+  const idx = indexFor(caseId);
   const template = TEMPLATES.find((t) => t.key === templateKey);
   if (template === undefined) {
     throw new Error(`no template registered for ${templateKey}`);
   }
-  const artifact = CASE.artifacts.find((a) => a.template_key === templateKey);
+  const artifact = idx.snapshot.artifacts.find((a) => a.template_key === templateKey);
   if (artifact === undefined) {
     throw new Error(`no artifact found for template ${templateKey}`);
   }
@@ -383,7 +434,7 @@ export function artifactView(templateKey: TemplateKey): ArtifactView {
       const facts =
         assertion !== null
           ? assertion.fact_ids.map((factId) => {
-              const fact = factsById.get(factId);
+              const fact = idx.factsById.get(factId);
               if (fact === undefined) {
                 throw new Error(`assertion ${assertion.id} cites unknown fact ${factId}`);
               }
@@ -400,8 +451,8 @@ export function artifactView(templateKey: TemplateKey): ArtifactView {
     templateKey,
     title: template.title,
     audience: template.audience,
-    person: CASE.person,
-    stats: CASE.stats,
+    person: idx.snapshot.person,
+    stats: idx.snapshot.stats,
     sections,
   };
 }

@@ -1,3 +1,4 @@
+import { CaseSwitcher } from "@/components/dashboard/CaseSwitcher";
 import { LinkButton } from "@/components/dashboard/LinkButton";
 
 export default function Home() {
@@ -30,6 +31,8 @@ export default function Home() {
           Powered by Juno · Does not diagnose · You review everything before
           it leaves
         </p>
+
+        <CaseSwitcher />
       </div>
     </main>
   );

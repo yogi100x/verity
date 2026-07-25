@@ -1,9 +1,11 @@
+import { getActiveCaseId } from "@/components/data/activeCase";
 import { conflictViews } from "@/components/data/dal";
 import { ConflictCard } from "@/components/conflicts/ConflictCard";
 import { GhostCard } from "@/components/ui/GhostCard";
 
-export default function ConflictsPage() {
-  const conflicts = conflictViews();
+export default async function ConflictsPage() {
+  const caseId = await getActiveCaseId();
+  const conflicts = conflictViews(caseId);
 
   return (
     <div>

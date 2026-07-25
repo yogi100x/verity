@@ -5,11 +5,13 @@
  * client state needed at the page level.
  */
 
+import { getActiveCaseId } from "@/components/data/activeCase";
 import { timelineEvents } from "@/components/data/dal";
 import { TimelineList } from "@/components/timeline/TimelineList";
 
-export default function TimelinePage() {
-  const events = timelineEvents();
+export default async function TimelinePage() {
+  const caseId = await getActiveCaseId();
+  const events = timelineEvents(caseId);
 
   return (
     <div>

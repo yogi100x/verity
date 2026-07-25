@@ -14,14 +14,17 @@
  */
 
 import { useId, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { subjectPossessive, type Voice } from "@/components/voice/voice";
 
 const ACCEPT = ".pdf,application/pdf,image/*,audio/*";
 
 export function DropZone({
   personName,
+  voice = "third",
   onFilesSelected,
 }: {
   personName: string;
+  voice?: Voice;
   onFilesSelected: (files: FileList | File[]) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -85,7 +88,7 @@ export function DropZone({
         Drag documents here
       </p>
       <p id={hintId} className="max-w-[26rem] text-body-s text-ink-secondary">
-        PDF, photo, or audio — anything with {personName}&rsquo;s care on it.
+        PDF, photo, or audio — anything with {subjectPossessive(voice, personName)} care on it.
       </p>
       <span
         aria-hidden="true"
