@@ -18,6 +18,7 @@ import {
 import fixtureRaw from '@/fixtures/margaret.json';
 import { templateByKey, slotsOf } from '@/lib/ai/templates';
 import { resolveSlot, buildArtifact, type BuildArtifactInput } from '@/lib/ai/artifacts';
+import { FRAMEWORK_CITATIONS } from '@/lib/detectors/well_managed';
 
 const JUDGEMENT_KEY_RE = /severity|urgency|priority|rank|risk|score/i;
 const JUDGEMENT_LANGUAGE_RE =
@@ -212,7 +213,16 @@ describe('resolveSlot — a live fact and a superseded fact matching the same sl
 });
 
 describe('resolveSlot — drug_therapies.framework_note is the one exempt slot', () => {
-  it('is OMITTED, not emitted with empty text, when it has no backing fact', () => {
+  // `resolveSlot` itself only ever resolves EVIDENCE — it has no notion of a
+  // framework citation. With no facts and no citation-source lookup (that
+  // lives in `buildArtifact`, via `isFrameworkCitationSlot` +
+  // `FRAMEWORK_CITATION_SOURCES`), the raw evidence path still lands on
+  // 'no_evidence', exactly as before. `buildArtifact — drug_therapies
+  // .framework_note is always filled from the framework citation` (below)
+  // proves the actual, current end-to-end behaviour: this slot is now NEVER
+  // omitted by `buildArtifact`, because it is filled from
+  // `FRAMEWORK_CITATIONS.pg_23_2` unconditionally.
+  it('resolveSlot alone (no framework-citation lookup) still lands on no_evidence with no facts', () => {
     const template = templateByKey('chc_dst_pack_v1');
     const slot = slotsOf(template)
       .map((s) => s.slot)
@@ -321,10 +331,16 @@ describe('buildArtifact — a gap-prompted assertion stores EMPTY text', () => {
 
   it('no gap-prompted assertion smuggles the template prompt into its text', () => {
     for (const key of ['chc_dst_pack_v1', 'gp_brief_v1'] as const) {
-      const { artifact } = buildArtifact(buildInput(key));
+      const { artifact, structuralAssertions } = buildArtifact(buildInput(key));
+      const structuralKeys = new Set(structuralAssertions.map((s) => s.slot_key));
       const promptsByKey = new Map(slotsOf(templateByKey(key)).map((s) => [s.slot.key, s.slot.gap_prompt]));
       for (const assertion of artifact.assertions) {
         if (assertion.citation_verified) continue;
+        // Structural assertions (verbatim copy / a framework citation) are the
+        // one deliberate exception: `citation_verified` is false because they
+        // carry no fact_ids, but their text is real, non-empty, verbatim copy —
+        // not a gap-prompt fall-through. `structural-slots.test.ts` covers them.
+        if (structuralKeys.has(assertion.slot_key)) continue;
         expect(assertion.text).toBe('');
         expect(assertion.text).not.toBe(promptsByKey.get(assertion.slot_key));
       }
@@ -346,21 +362,29 @@ function buildFor(templateKey: 'chc_dst_pack_v1' | 'gp_brief_v1'): Artifact {
 }
 
 describe('buildArtifact — both templates over the same fact set', () => {
-  it('drug_therapies.framework_note never appears as an assertion when unfillable, only omitted', () => {
-    const { artifact, omissions } = buildArtifact({
+  // Limitation 1 fix: drug_therapies.framework_note is a legitimate
+  // FRAMEWORK_CITATIONS fill (its renderer is 'quote' and the citation is
+  // verbatim-verified framework text), and it is filled unconditionally,
+  // with NO facts at all — this used to be the omitted case.
+  it('drug_therapies.framework_note is always filled from the framework citation, never omitted', () => {
+    const { artifact, omissions, structuralAssertions } = buildArtifact({
       template: templateByKey('chc_dst_pack_v1'),
       facts: [],
       claimsById: new Map(),
       personId: fixture.person.id,
     });
-    expect(artifact.assertions.some((a) => a.slot_key === 'drug_therapies.framework_note')).toBe(
-      false,
-    );
-    // ...but it is NAMED as an omission, with the reason. Being absent from
-    // the assertions is not licence to be absent from the output.
-    const named = omissions.find((o) => o.slot_key === 'drug_therapies.framework_note');
-    expect(named).toBeDefined();
-    expect(named?.reason).toBe('no_evidence');
+    const assertion = artifact.assertions.find((a) => a.slot_key === 'drug_therapies.framework_note');
+    expect(assertion).toBeDefined();
+    expect(assertion?.text).toBe(FRAMEWORK_CITATIONS.pg_23_2.text);
+    expect(assertion?.fact_ids).toEqual([]);
+    expect(assertion?.citation_verified).toBe(false);
+
+    expect(omissions.some((o) => o.slot_key === 'drug_therapies.framework_note')).toBe(false);
+
+    const structural = structuralAssertions.find((s) => s.slot_key === 'drug_therapies.framework_note');
+    expect(structural).toBeDefined();
+    expect(structural?.source).toBe('framework_citation');
+    expect(structural?.attribution).toBe(FRAMEWORK_CITATIONS.pg_23_2.ref);
   });
 
   it('produce different, non-empty section-key sets from one fact set — templates are data', () => {

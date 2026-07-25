@@ -19,12 +19,23 @@ import type {
   Artifact,
   ArtifactTemplate,
   Assertion,
+  ChcDomain,
   Claim,
   Fact,
   Slot,
 } from '@/lib/contracts';
+import { ChcLevel, isValidLevel } from '@/lib/contracts';
 import { liveFacts } from '@/lib/ai/facts';
-import { ontologyMatches, slotsOf } from '@/lib/ai/templates';
+import {
+  isFrameworkCitationSlot,
+  isStructuralCopySlot,
+  levelSlotDomain,
+  ontologyMatches,
+  slotsOf,
+} from '@/lib/ai/templates';
+import { filterOutput } from '@/lib/safety/output_filter';
+import { PERSISTENT_BANNER, footer } from '@/lib/copy/safety';
+import { FRAMEWORK_CITATIONS, type CitationId } from '@/lib/detectors/well_managed';
 
 /**
  * WHY a slot was left out of the artefact. Omitting silently was a defect:
@@ -120,6 +131,18 @@ function composeText(facts: readonly Fact[]): string {
   return facts.map((fact) => `${fact.subject}: ${fact.canonical_value}`).join('\n');
 }
 
+/**
+ * A level word among these values that IS a valid `ChcLevel` for `domain`,
+ * per the frozen `CHC_DOMAIN_LEVELS` (never a ceiling — see
+ * `lib/ai/templates.ts`). Trimmed and lowercased before parsing, matching
+ * `levelsNotAvailableInDomain`'s own normalisation, so the two never disagree
+ * about the same value.
+ */
+function isValidChcLevelValue(domain: ChcDomain, value: string): boolean {
+  const parsed = ChcLevel.safeParse(value.trim().toLowerCase());
+  return parsed.success && isValidLevel(domain, parsed.data);
+}
+
 export function resolveSlot(
   slot: Slot,
   facts: readonly Fact[],
@@ -127,7 +150,25 @@ export function resolveSlot(
 ): SlotResolution {
   const matched = factsForSlot(slot, facts, claimsById);
 
-  if (matched.length > 0) {
+  // A `<domain>.suggested_level` slot may only ever be filled with a value
+  // that IS a valid CHC level for that exact domain (never a judgement this
+  // pipeline invents — only ever a level word already present in the
+  // record). A domain slot with narrative evidence ("unsteady on stairs") or
+  // a level the domain does not offer ("severe" under continence) is treated
+  // exactly as if nothing had matched, and falls through below.
+  const levelDomain = levelSlotDomain(slot);
+  const levelOk =
+    levelDomain === null || matched.every((fact) => isValidChcLevelValue(levelDomain, fact.canonical_value));
+
+  // Composed evidence text is GENERATED output (this module joins subject +
+  // value), never verbatim copy or a source quote, so it must clear the same
+  // filter every other generated string in this product clears. A slot whose
+  // composed text trips the filter is treated exactly as if nothing had
+  // matched — over-blocking is the documented, deliberate design of
+  // `filterOutput` itself.
+  const filterOk = matched.length === 0 || filterOutput(composeText(matched), []).ok;
+
+  if (matched.length > 0 && levelOk && filterOk) {
     return {
       slot_key: slot.key,
       fact_ids: matched.map((fact) => fact.id),
@@ -164,6 +205,37 @@ export interface BuildArtifactInput {
   readonly facts: readonly Fact[];
   readonly claimsById: ReadonlyMap<string, Pick<Claim, 'verified_substring'>>;
   readonly personId: string;
+  /** The person this pack is about — required to fill `cover.subject` (and,
+   *  as the opt-in signal for the whole structural front matter, `cover.scope`
+   *  too). Absent by default: a caller that does not supply it gets the prior
+   *  behaviour exactly — those slots stay omitted, named, as
+   *  `awaiting_fixed_copy`. Never invented when absent. */
+  readonly person?: { readonly display_name: string };
+  /** The assembly date for `method.provenance` (`footer()`'s `[date]` slot).
+   *  Deliberately a caller-supplied STRING, never `new Date()` here — this
+   *  file is pure and synchronous, and a wall-clock read would make its
+   *  output non-deterministic and untestable. Absent by default: the slot
+   *  stays omitted, named, rather than dated with an invented value. */
+  readonly assembledOn?: string;
+}
+
+/**
+ * A slot filled from something OTHER than a resolved `Fact` — verbatim Lane C
+ * copy, or a verbatim framework citation. Its `Assertion.citation_verified`
+ * is `false` (no `fact_ids`, per the DB's own constraint), which is
+ * indistinguishable, on the `Assertion` alone, from a slot with no evidence
+ * yet. THIS is the third state: a slot_key appearing here is neither
+ * "evidence-backed" (citation_verified true) nor "no evidence" (empty text,
+ * citation_verified false) — it is verbatim copy this pipeline is allowed to
+ * assert without a fact behind it, named as such so a reader can never
+ * mistake it for either of the other two. `Assertion` itself cannot carry
+ * this — it is a frozen contract with no field for it.
+ */
+export interface StructuralAssertion {
+  readonly slot_key: string;
+  readonly source: 'lane_c_copy' | 'framework_citation';
+  /** The citation's `ref`, for a `framework_citation` slot; `null` otherwise. */
+  readonly attribution: string | null;
 }
 
 /** The artefact plus the slots it deliberately left out, and why. Omissions
@@ -175,6 +247,9 @@ export interface BuildArtifactResult {
    *  `artifact.assertions.length + omissions.length === slotsOf(template).length`
    *  always — every slot is either asserted or accounted for here. */
   readonly omissions: readonly SlotOmission[];
+  /** Every assertion filled from verbatim copy rather than a fact — see
+   *  `StructuralAssertion`. A subset of `artifact.assertions` by `slot_key`. */
+  readonly structuralAssertions: readonly StructuralAssertion[];
 }
 
 /**
@@ -191,6 +266,54 @@ export interface BuildArtifactResult {
  * time, so it cannot go stale inside a stored artefact, and a reader can
  * never mistake template copy for something the record said.
  */
+/**
+ * Where a structural (`cover.*` / `method.*`, `citation_required === false`)
+ * slot's fixed copy comes from. Keyed on `slot_key` because different
+ * structural slots need semantically DIFFERENT copy — a person's name is not
+ * a scope statement — and there is no way to derive WHICH copy a slot needs
+ * from template data alone. The SET of slots eligible for this table is
+ * never hardcoded, though: it is `isStructuralCopySlot` (`lib/ai/templates.ts`)
+ * filtering the live template, and a structural slot with no entry here (or
+ * whose resolver returns `null`) stays omitted, honestly, exactly as before.
+ *
+ * `cover.scope` needs no input of its own — `PERSISTENT_BANNER` is a fixed
+ * constant — but is still gated behind `person` below, deliberately more
+ * conservative than the text itself requires: this pack's front matter
+ * renders as a whole or not at all, so a reviewer is never shown a scope
+ * statement sitting above no named subject.
+ */
+const STRUCTURAL_COPY_SOURCES: Readonly<Record<string, (input: BuildArtifactInput) => string | null>> = {
+  'cover.subject': (input) => input.person?.display_name ?? null,
+  'cover.scope': (input) => (input.person === undefined ? null : PERSISTENT_BANNER),
+  'method.provenance': (input) =>
+    input.person === undefined || input.assembledOn === undefined
+      ? null
+      : footer(input.person.display_name, input.assembledOn),
+};
+
+/** Which `FRAMEWORK_CITATIONS` entry fills a given framework-citation slot
+ *  (see `isFrameworkCitationSlot`). A slot matching the predicate with no
+ *  entry here stays on the ordinary evidence path, unfilled if nothing
+ *  qualifies — never approximated. */
+const FRAMEWORK_CITATION_SOURCES: Readonly<Record<string, CitationId>> = {
+  'drug_therapies.framework_note': 'pg_23_2',
+};
+
+function structuralAssertion(artifactId: string, slotKey: string, text: string): Assertion {
+  return {
+    id: randomUUID(),
+    artifact_id: artifactId,
+    slot_key: slotKey,
+    text,
+    fact_ids: [],
+    // Never true: this text carries no fact_ids to back it, and the DB
+    // constraint (`citation_verified = false or fact_ids non-empty`) forbids
+    // it. `StructuralAssertion` is the honest, separate record of WHY this
+    // false is different from a plain no-evidence gap.
+    citation_verified: false,
+  };
+}
+
 export function buildArtifact(input: BuildArtifactInput): BuildArtifactResult {
   const { template, facts, claimsById, personId } = input;
   const factsById = new Map(facts.map((fact) => [fact.id, fact]));
@@ -198,8 +321,35 @@ export function buildArtifact(input: BuildArtifactInput): BuildArtifactResult {
 
   const assertions: Assertion[] = [];
   const omissions: SlotOmission[] = [];
+  const structuralAssertions: StructuralAssertion[] = [];
 
   for (const { section, slot } of slotsOf(template)) {
+    if (isStructuralCopySlot(slot)) {
+      const text = STRUCTURAL_COPY_SOURCES[slot.key]?.(input) ?? null;
+      if (text !== null) {
+        assertions.push(structuralAssertion(artifactId, slot.key, text));
+        structuralAssertions.push({ slot_key: slot.key, source: 'lane_c_copy', attribution: null });
+        continue;
+      }
+      // No mapped copy source, or a required input (person / assembledOn) is
+      // missing: fall through to the ordinary path below, which omits this
+      // slot as 'awaiting_fixed_copy' — unchanged from before Lane C shipped
+      // copy.
+    } else if (isFrameworkCitationSlot(slot)) {
+      const citationId = FRAMEWORK_CITATION_SOURCES[slot.key];
+      if (citationId !== undefined) {
+        const citation = FRAMEWORK_CITATIONS[citationId];
+        assertions.push(structuralAssertion(artifactId, slot.key, citation.text));
+        structuralAssertions.push({
+          slot_key: slot.key,
+          source: 'framework_citation',
+          attribution: citation.ref,
+        });
+        continue;
+      }
+      // No mapped citation: fall through to the ordinary evidence path.
+    }
+
     const resolution = resolveSlot(slot, facts, claimsById);
     if (resolution.omitted) {
       if (resolution.omission_reason === null) {
@@ -241,5 +391,6 @@ export function buildArtifact(input: BuildArtifactInput): BuildArtifactResult {
       created_at: new Date().toISOString(),
     },
     omissions,
+    structuralAssertions,
   };
 }

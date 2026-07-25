@@ -20,15 +20,42 @@ import {
   CHC_DOMAIN_LEVELS,
   type Slot,
 } from '@/lib/contracts';
+import { BANNED_ARTEFACT_TITLES } from '@/lib/copy/safety';
 
 const Templates = z.array(ArtifactTemplate);
 
 let cachedTemplates: ArtifactTemplate[] | null = null;
 
+/** A loaded template's title matches one of `BANNED_ARTEFACT_TITLES` — a real
+ *  safety rule (this product organises evidence; it must never present
+ *  itself as a clinical document) that nothing previously enforced. Word-
+ *  boundary, case-insensitive substring: "SBAR Referral Pack" is caught, not
+ *  only an exact "SBAR". Thrown at load, alongside the zod parse, so a bad
+ *  title fails loudly rather than shipping. */
+export class BannedArtefactTitleError extends Error {
+  constructor(templateKey: string, title: string, matched: string) {
+    super(
+      `template "${templateKey}" has a banned artefact title "${title}" (matches "${matched}")`,
+    );
+    this.name = 'BannedArtefactTitleError';
+  }
+}
+
+function assertTitleNotBanned(template: ArtifactTemplate): void {
+  for (const banned of BANNED_ARTEFACT_TITLES) {
+    const pattern = new RegExp(`\\b${banned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (pattern.test(template.title)) {
+      throw new BannedArtefactTitleError(template.key, template.title, banned);
+    }
+  }
+}
+
 /** All phase-1 templates, parsed and validated from fixtures/templates.json. */
 export function loadTemplates(): ArtifactTemplate[] {
   if (cachedTemplates === null) {
-    cachedTemplates = Templates.parse(templatesJson);
+    const parsed = Templates.parse(templatesJson);
+    for (const template of parsed) assertTitleNotBanned(template);
+    cachedTemplates = parsed;
   }
   return cachedTemplates;
 }
@@ -135,6 +162,60 @@ export function levelsNotAvailableInDomain(
     if (!flagged.includes(trimmed)) flagged.push(trimmed);
   }
   return flagged;
+}
+
+/**
+ * A slot with no evidence path at all: fixed wording this pipeline is not
+ * allowed to invent from facts (a cover statement, a scope statement, a
+ * provenance note). Derived from template data — `citation_required` and
+ * `gap_prompt` — never from a slot-key list, so a fifth structural slot
+ * added to a template later is picked up automatically.
+ */
+export function isStructuralCopySlot(slot: Pick<Slot, 'citation_required' | 'gap_prompt'>): boolean {
+  return slot.citation_required === false && slot.gap_prompt === null;
+}
+
+/**
+ * A slot whose renderer is `quote`, requires a citation, but has no
+ * `gap_prompt` to fall back on — the shape `drug_therapies.framework_note`
+ * has. Its evidence is a verbatim framework citation, not a record fact:
+ * legitimate to fill from `FRAMEWORK_CITATIONS`, never from composed prose.
+ * Derived from template data (`citation_required`, `gap_prompt`, `renderer`),
+ * never from a slot-key list.
+ */
+export function isFrameworkCitationSlot(
+  slot: Pick<Slot, 'citation_required' | 'gap_prompt' | 'renderer'>,
+): boolean {
+  return slot.citation_required === true && slot.gap_prompt === null && slot.renderer === 'quote';
+}
+
+/**
+ * Template key-naming CONVENTION for "this slot holds a controlled CHC
+ * level, never narrative prose": the slot's key is exactly `<domain>` +
+ * this suffix, where `<domain>` parses as a `ChcDomain`.
+ */
+const LEVEL_SLOT_KEY_SUFFIX = '.suggested_level';
+
+/**
+ * The `ChcDomain` a slot's suggested-level value must belong to, or `null`
+ * if the slot is not a level slot at all.
+ *
+ * TODO(orchestrator): this is a KEY-NAMING CONVENTION, not a schema field —
+ * `Slot` (lib/contracts.ts) has nowhere to declare "this slot's value is a
+ * controlled vocabulary of ChcLevel". The real fix is a frozen-contract
+ * change (`Slot.value_domain?: 'chc_level'`), which is out of scope here
+ * because the contract does not change outside the orchestrator. Until then:
+ * a template that renamed the `.suggested_level` suffix, or introduced a new
+ * level-holding slot under a different naming convention, would silently
+ * disable this check and let narrative text back into a level field again —
+ * that is the cost of inferring the vocabulary from a key convention instead
+ * of a schema field.
+ */
+export function levelSlotDomain(slot: Pick<Slot, 'key'>): ChcDomain | null {
+  if (!slot.key.endsWith(LEVEL_SLOT_KEY_SUFFIX)) return null;
+  const prefix = slot.key.slice(0, slot.key.length - LEVEL_SLOT_KEY_SUFFIX.length);
+  const domain = ChcDomain.safeParse(prefix);
+  return domain.success ? domain.data : null;
 }
 
 /** Every slot in a template, with the section it belongs to. */
