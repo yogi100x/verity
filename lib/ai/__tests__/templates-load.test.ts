@@ -55,11 +55,18 @@ describe('templateByKey', () => {
     expect(t.key).toBe('gp_brief_v1');
   });
 
+  it('returns the discharge_pack_v1 template (S7)', () => {
+    const t = templateByKey('discharge_pack_v1');
+    expect(t.key).toBe('discharge_pack_v1');
+  });
+
   it('throws UnknownTemplateError for a key no template registers', () => {
-    // TemplateKey includes 'discharge_pack_v1' and 'aa1_narrative_v1' in the
-    // contract (future phases) but neither has a row in fixtures/templates.json
-    // yet — exactly the "unknown to the loader" case this function guards.
-    expect(() => templateByKey('discharge_pack_v1')).toThrow(UnknownTemplateError);
+    // TemplateKey includes 'aa1_narrative_v1' in the contract (a future
+    // phase) but it has no row in fixtures/templates.json — exactly the
+    // "unknown to the loader" case this function guards. This test used
+    // discharge_pack_v1 as its example until S7 landed that row — the
+    // original comment even predicted this update.
+    expect(() => templateByKey('aa1_narrative_v1')).toThrow(UnknownTemplateError);
   });
 });
 

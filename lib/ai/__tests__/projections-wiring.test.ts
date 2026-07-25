@@ -344,7 +344,8 @@ describe('GET /api/debug/inspect — counts still add up for both templates with
         /data-slots-total="(\d+)" data-filled="(\d+)" data-verbatim-copy="(\d+)" data-gap-prompted="(\d+)" data-omitted="(\d+)"/g,
       ),
     ];
-    expect(cards).toHaveLength(2);
+    // Three template rows since S7 added discharge_pack_v1.
+    expect(cards).toHaveLength(3);
     for (const [, slotsTotalStr, filledStr, verbatimCopyStr, gapPromptedStr, omittedStr] of cards) {
       const slotsTotal = Number(slotsTotalStr);
       const filled = Number(filledStr);
