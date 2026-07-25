@@ -16,6 +16,23 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { EMIT_CLAIMS_TOOL } from '@/lib/contracts';
 
+/**
+ * The exact ontology keys the extraction prompt TEACHES (as opposed to the
+ * open namespaces it merely names). Every key here must have a consumer — a
+ * template slot pattern or a detector — or extraction produces claims that
+ * verify, group, and then silently join nothing. That is precisely how the
+ * checklist key drifted: the prompt taught instruction.chc_checklist while
+ * the fixture seed and the 28-day-clock detector consumed chc.checklist_date.
+ * Same concept, two spellings, no error anywhere — the clock just never
+ * started. The vocabulary-alignment test walks this list against the real
+ * templates and detector sources so that class of no-join fails red instead
+ * of relying on someone noticing.
+ *
+ * Add a key here whenever the prompt teaches a new exact key. The prompt
+ * text references these values so prompt and list cannot drift apart.
+ */
+export const TAUGHT_KEYS = ['chc.checklist_date'] as const;
+
 export const EXTRACTION_SYSTEM: string = `You extract claims from a single source document for a care-record tool.
 
 Your job has two parts, both mandatory:
@@ -38,9 +55,9 @@ When the source has pages, set "page" to the 1-indexed page number the quote app
 
 Set "asserted_at" to the date the claim was made or is about, as an ISO date, when the source states or clearly implies one. Otherwise use null and set "date_precision" to "unknown".
 
-ONTOLOGY KEYS. Every claim's "ontology_key" is a lowercase dotted namespace: a category, a dot, then a specific subject — like "medication.furosemide" or "instruction.renal_review". Use these categories: medication, instruction, diagnosis, observation, result, referral, encounter, demographics, admin, communication. Keep the category singular and stable; a key with no dot will be discarded.
+ONTOLOGY KEYS. Every claim's "ontology_key" is a lowercase dotted namespace: a category, a dot, then a specific subject — like "medication.furosemide" or "instruction.renal_review". Use these categories: medication, instruction, diagnosis, observation, result, referral, encounter, demographics, admin, communication, chc. Keep the category singular and stable; a key with no dot will be discarded.
 
-One key is special and must be used exactly: any mention of an NHS Continuing Healthcare Checklist — completed, planned, requested, or referred for — is keyed "instruction.chc_checklist", with "asserted_at" set to the checklist's own date when the source states one. Record only what the document says about the checklist (that it happened or is planned, when, and by whom); a checklist outcome is a screening result, not a verdict, and you never characterise it beyond the document's words.
+One key is special and must be used exactly: any mention of an NHS Continuing Healthcare Checklist — completed, planned, requested, or referred for — is keyed "${TAUGHT_KEYS[0]}", with "asserted_at" set to the checklist's own date when the source states one. Record only what the document says about the checklist (that it happened or is planned, when, and by whom); a checklist outcome is a screening result, not a verdict, and you never characterise it beyond the document's words.
 
 Emit only claims the source genuinely makes. If a source contains little or nothing extractable, return few claims or none — never pad the list with placeholder or filler entries. A claim whose subject, value, or quote is a meaningless token will be discarded, and emitting it wastes the space of a real one.
 

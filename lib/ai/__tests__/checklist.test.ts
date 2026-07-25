@@ -1,6 +1,12 @@
 // @vitest-environment node
 /**
- * instruction.chc_checklist — checklist dates from real documents.
+ * chc.checklist_date — checklist dates from real documents.
+ *
+ * KEY RULING (orchestrator, 25 Jul): the canonical key is chc.checklist_date
+ * — the fixture seed and the 28-day-clock detector both consume it, and the
+ * fixture is the contract's shadow. The board's instruction.chc_checklist
+ * wording was shorthand. PR #14 shipped teaching the shorthand; this aligns
+ * the prompt to the ecosystem.
  *
  * The fixture deliberately has no checklist claim (the seed covers the demo),
  * so this capability only exists in live extraction, and only a real call can
@@ -19,10 +25,10 @@ import { describe, expect, it } from 'vitest';
 import { EXTRACTION_SYSTEM } from '../prompts';
 import { hasWellFormedKey } from '../verify';
 import { groupClaims } from '../group';
-import { ontologyMatches, templateByKey } from '../templates';
 import { extractSourceLive } from '../extract';
 import { createInMemoryFixtureStore } from '@/lib/modes';
-import type { Claim } from '@/lib/contracts';
+import { chcDeadlines } from '@/lib/detectors/chc_clock';
+import { Fact, type Claim } from '@/lib/contracts';
 
 function liveKey(): string | undefined {
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
@@ -36,8 +42,11 @@ function liveKey(): string | undefined {
 }
 
 describe('the prompt teaches the key', () => {
-  it('names instruction.chc_checklist exactly, and stays judgement-free', () => {
-    expect(EXTRACTION_SYSTEM).toContain('instruction.chc_checklist');
+  it('names chc.checklist_date exactly, and stays judgement-free', () => {
+    expect(EXTRACTION_SYSTEM).toContain('chc.checklist_date');
+    // The superseded shorthand must be GONE — teaching both keys would
+    // recreate the split vocabulary this ruling closed.
+    expect(EXTRACTION_SYSTEM).not.toContain('instruction.chc_checklist');
     expect(EXTRACTION_SYSTEM).toContain('Continuing Healthcare Checklist');
     // "a door, not a verdict" — the guidance must not tell the model to
     // characterise an outcome.
@@ -45,7 +54,7 @@ describe('the prompt teaches the key', () => {
   });
 
   it('the key itself passes the anchoring key check', () => {
-    expect(hasWellFormedKey({ ontology_key: 'instruction.chc_checklist' })).toBe(true);
+    expect(hasWellFormedKey({ ontology_key: 'chc.checklist_date' })).toBe(true);
   });
 });
 
@@ -53,7 +62,7 @@ describe('the key flows through the existing pipeline untouched', () => {
   const claim: Claim = {
     id: '00000000-0000-4000-8000-00000000c0de',
     source_id: '50000000-0000-4000-8000-000000000001',
-    ontology_key: 'instruction.chc_checklist',
+    ontology_key: 'chc.checklist_date',
     subject: 'chc checklist',
     value: 'completed 10 July 2026',
     quote: 'CHC Checklist completed on 10 July 2026 by the district nurse.',
@@ -67,19 +76,41 @@ describe('the key flows through the existing pipeline untouched', () => {
   it('groups under its own key', () => {
     const groups = groupClaims([claim]);
     expect(groups).toHaveLength(1);
-    expect(groups[0]?.ontology_key).toBe('instruction.chc_checklist');
+    expect(groups[0]?.ontology_key).toBe('chc.checklist_date');
   });
 
-  it('matches instruction.* slots in the shipped templates — no template change needed', () => {
-    // gp_brief_v1 is on this branch; discharge_pack_v1 (S7) rides a separate
-    // branch and also matches instruction.* — its own suite covers that.
-    const brief = templateByKey('gp_brief_v1');
-    const patterns = brief.sections
-      .flatMap((s) => s.slots)
-      .flatMap((s) => s.ontology_match);
-    expect(
-      patterns.some((p) => ontologyMatches(p, 'instruction.chc_checklist')),
-    ).toBe(true);
+  it('the 28-day-clock detector consumes it — the join the old key silently missed', () => {
+    // THIS is the assertion the ruling exists for. Under the superseded
+    // instruction.chc_checklist key, this fact was invisible to the detector
+    // built to count 28 days from it: nothing errored, the clock just never
+    // started. The fact below mirrors what the pipeline derives from the
+    // claim above.
+    const fact = {
+      id: '00000000-0000-4000-8000-00000000fac7',
+      person_id: '00000000-0000-4000-8000-000000000001',
+      ontology_key: 'chc.checklist_date',
+      subject: 'chc checklist',
+      // ISO here, deliberately. The detector parses canonical_value FIRST,
+      // and its parseIsoDate only forces UTC for bare YYYY-MM-DD — free text
+      // like 'completed 10 July 2026' falls through to raw new Date(), which
+      // V8 parses as LOCAL time, so on a UTC+1 machine the clock reports the
+      // 9th for a checklist done on the 10th. Timezone-dependent off-by-one,
+      // and buildFacts DOES emit free-text canonical values. Lane C's file,
+      // reported on the PR, not fixed here. This test proves the JOIN — the
+      // thing the key ruling exists for — with the value shape the detector
+      // handles correctly.
+      canonical_value: '2026-07-10',
+      provenance: 'document_extracted',
+      status: 'confirmed',
+      valid_from: '2026-07-10',
+      valid_to: null,
+      supporting_claim_ids: [claim.id],
+      conflict_id: null,
+      superseded_by: null,
+    } as const;
+    const deadlines = chcDeadlines([Fact.parse(fact)], new Date('2026-07-25T12:00:00Z'));
+    expect(deadlines).toHaveLength(1);
+    expect(deadlines[0]?.checklist_date).toBe('2026-07-10');
   });
 });
 
@@ -87,7 +118,7 @@ describe('live: a real document mentioning a checklist', () => {
   const key = liveKey();
 
   it.skipIf(key === undefined)(
-    'yields an instruction.chc_checklist claim with the checklist date',
+    'yields a chc.checklist_date claim with the checklist date',
     async () => {
       if (key !== undefined && process.env.ANTHROPIC_API_KEY === undefined) {
         process.env.ANTHROPIC_API_KEY = key;
@@ -122,9 +153,9 @@ describe('live: a real document mentioning a checklist', () => {
 
       expect(report.degraded).toBe(false);
       const checklist = report.kept.filter(
-        (c) => c.ontology_key === 'instruction.chc_checklist',
+        (c) => c.ontology_key === 'chc.checklist_date',
       );
-      expect(checklist.length, 'no instruction.chc_checklist claim emerged').toBeGreaterThan(0);
+      expect(checklist.length, 'no chc.checklist_date claim emerged').toBeGreaterThan(0);
       const dated = checklist.find((c) => c.asserted_at === '2026-07-10');
       expect(dated, 'checklist claim did not carry the checklist date').toBeDefined();
       expect(dated?.date_precision).toBe('exact');
