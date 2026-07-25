@@ -83,7 +83,13 @@ The question states what the documents say and asks something a clinician can an
 
 ### Artefacts
 
+**The templates already exist — do not invent slots.** Read them from `fixtures/templates.json`: `chc_dst_pack_v1` (31 slots, 12 DST domains plus cover and method) and `gp_brief_v1` (8 slots). Lane B renders the same file, so any slot you invent is a slot nobody displays.
+
 Render `Fact`s through an `ArtifactTemplate` row. A slot resolves only to facts backed by at least one claim with `verified_substring = true`; otherwise it falls through to `gap_prompt`. **Never to generated prose.**
+
+Match facts to slots on `ontology_match`, which supports a trailing wildcard (`medication.*`). Domain headings come from `CHC_DOMAIN_NAMES` via the template's section title — never hand-typed.
+
+If you need a slot that does not exist, that is a template change: say so in your PR. Do not add it yourself.
 
 `gp_brief_v1` must cost you a **seed row plus a renderer, not new pipeline code**. If it doesn't, the abstraction has failed and the central pitch claim is false — stop and say so in your PR.
 

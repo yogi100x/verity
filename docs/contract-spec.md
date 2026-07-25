@@ -540,6 +540,28 @@ If that test is red, **nothing else can be trusted** — every lane is building 
 
 ---
 
+## 3b. `fixtures/templates.json`
+
+The two phase-1 `ArtifactTemplate` rows: `chc_dst_pack_v1` (31 slots across 12 DST domains plus cover and method) and `gp_brief_v1` (8 slots).
+
+**This file is the proof that templates are data, not code.** Both lanes read it: Lane A to know what to fill, Lane B to know what to lay out. Without it they would each invent their own slot lists and diverge — exactly the failure the contract exists to prevent.
+
+Validated by `lib/__tests__/templates.test.ts`, whose most important assertion is the **cross-check**: every `slot_key` used by an artefact in `margaret.json` must exist in its template. Without that test, Lane A can fill slots Lane B never renders and neither notices until integration.
+
+Also enforced there:
+
+- All twelve DST domains present, with section titles matching `CHC_DOMAIN_NAMES` **exactly** — an assessor reads the pack against the real form
+- Slot keys unique within a template
+- Every citation-required slot has a `gap_prompt`, so an unfillable slot degrades to an honest prompt rather than blank space
+- No slot key smuggles in a judgement field
+- Every `suggested_level` slot's label says *suggested, not determined*, and the three High-capped domains plus altered states say so in their labels
+
+**Adding a third gatekeeper (phase 2) should be a new object in this file plus a renderer.** If it needs pipeline changes, the abstraction has failed — see Lane A's brief.
+
+Lane D seeds `artifact_templates` from this file. Nobody hand-writes template SQL.
+
+---
+
 ## 4. Changing the contract after freeze
 
 It will need to change. Handle it deliberately:

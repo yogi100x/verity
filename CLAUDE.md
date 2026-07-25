@@ -83,6 +83,16 @@ Three things in it are deliberate and must not be "cleaned up":
 
 Verified: all 16 verified quotes are literal substrings of their sources, zero dangling references.
 
+### The templates
+
+`fixtures/templates.json` holds the two phase-1 `ArtifactTemplate` rows — `chc_dst_pack_v1` (31 slots across all 12 DST domains plus cover and method) and `gp_brief_v1` (8 slots).
+
+**Templates are data, not code.** Lane A reads this file to know what to fill; Lane B reads it to know what to lay out; Lane D seeds `artifact_templates` from it. Nobody hardcodes a slot list, and nobody writes template SQL by hand.
+
+`lib/__tests__/templates.test.ts` enforces it. The load-bearing assertion is the cross-check: every `slot_key` used by an artefact in `margaret.json` must exist in its template. Without it, Lane A can fill slots Lane B never renders and neither notices until integration.
+
+If a lane needs a slot that does not exist, that is a template change — it goes in the PR description, not into the file.
+
 ---
 
 ## Stack

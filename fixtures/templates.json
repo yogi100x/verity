@@ -1,0 +1,443 @@
+[
+  {
+    "key": "chc_dst_pack_v1",
+    "title": "NHS Continuing Healthcare — Evidence Pack",
+    "audience": "Multidisciplinary Team and ICB panel",
+    "sections": [
+      {
+        "key": "cover",
+        "title": "Cover",
+        "slots": [
+          {
+            "key": "cover.subject",
+            "label": "Person this pack is about",
+            "ontology_match": ["person.identity"],
+            "citation_required": false,
+            "renderer": "prose",
+            "gap_prompt": null
+          },
+          {
+            "key": "cover.scope",
+            "label": "What this pack is and is not",
+            "ontology_match": [],
+            "citation_required": false,
+            "renderer": "prose",
+            "gap_prompt": null
+          },
+          {
+            "key": "cover.sources",
+            "label": "Documents this pack draws on",
+            "ontology_match": ["source.inventory"],
+            "citation_required": false,
+            "renderer": "list",
+            "gap_prompt": "No documents have been added yet."
+          }
+        ]
+      },
+      {
+        "key": "breathing",
+        "title": "Breathing",
+        "slots": [
+          {
+            "key": "breathing.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.breathing", "diagnosis.respiratory", "observation.breathlessness"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain. Consider adding: GP record summary, hospital letters, or a care log covering breathlessness or oxygen use."
+          },
+          {
+            "key": "breathing.suggested_level",
+            "label": "Suggested level (suggested, not determined — the MDT decides)",
+            "ontology_match": ["chc.breathing"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "nutrition",
+        "title": "Nutrition – food and drink",
+        "slots": [
+          {
+            "key": "nutrition.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.nutrition", "observation.weight", "assessment.must"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain. Consider adding: a MUST score, food and fluid charts, or SALT assessment."
+          },
+          {
+            "key": "nutrition.suggested_level",
+            "label": "Suggested level (suggested, not determined — the MDT decides)",
+            "ontology_match": ["chc.nutrition"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "continence",
+        "title": "Continence",
+        "slots": [
+          {
+            "key": "continence.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.continence"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain. Consider asking the district nurse or care provider for continence care records."
+          },
+          {
+            "key": "continence.suggested_level",
+            "label": "Suggested level (this domain has no Severe or Priority level — High is its ceiling)",
+            "ontology_match": ["chc.continence"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "skin_integrity",
+        "title": "Skin (including tissue viability)",
+        "slots": [
+          {
+            "key": "skin_integrity.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.skin_integrity", "assessment.waterlow"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain. Consider adding: a Waterlow score, turning charts, or wound care notes."
+          },
+          {
+            "key": "skin_integrity.suggested_level",
+            "label": "Suggested level (suggested, not determined — the MDT decides)",
+            "ontology_match": ["chc.skin_integrity"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "mobility",
+        "title": "Mobility",
+        "slots": [
+          {
+            "key": "mobility.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.mobility", "observation.falls", "assessment.moving_handling"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain. Consider adding: a Moving and Handling assessment, falls risk assessment, or care log transfers."
+          },
+          {
+            "key": "mobility.suggested_level",
+            "label": "Suggested level (suggested, not determined — the MDT decides)",
+            "ontology_match": ["chc.mobility"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "communication",
+        "title": "Communication",
+        "slots": [
+          {
+            "key": "communication.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.communication"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain."
+          },
+          {
+            "key": "communication.suggested_level",
+            "label": "Suggested level (this domain has no Severe or Priority level — High is its ceiling)",
+            "ontology_match": ["chc.communication"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "psychological_emotional",
+        "title": "Psychological and emotional needs",
+        "slots": [
+          {
+            "key": "psychological_emotional.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.psychological_emotional"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain."
+          },
+          {
+            "key": "psychological_emotional.suggested_level",
+            "label": "Suggested level (this domain has no Severe or Priority level — High is its ceiling)",
+            "ontology_match": ["chc.psychological_emotional"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "cognition",
+        "title": "Cognition",
+        "slots": [
+          {
+            "key": "cognition.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.cognition", "diagnosis.dementia"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain. Consider adding: a cognitive assessment or memory clinic letter."
+          },
+          {
+            "key": "cognition.suggested_level",
+            "label": "Suggested level (suggested, not determined — the MDT decides)",
+            "ontology_match": ["chc.cognition"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "behaviour",
+        "title": "Behaviour",
+        "slots": [
+          {
+            "key": "behaviour.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.behaviour", "observation.agitation"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain. Consider adding: incident reports, behaviour charts, or care log entries."
+          },
+          {
+            "key": "behaviour.suggested_level",
+            "label": "Suggested level (suggested, not determined — the MDT decides)",
+            "ontology_match": ["chc.behaviour"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "drug_therapies",
+        "title": "Drug therapies and medication",
+        "slots": [
+          {
+            "key": "drug_therapies.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.drug_therapies", "medication.*"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain. Consider adding: a MAR chart, repeat prescription, or medication review record."
+          },
+          {
+            "key": "drug_therapies.conflicts",
+            "label": "Where the sources disagree",
+            "ontology_match": ["medication.*"],
+            "citation_required": true,
+            "renderer": "conflict",
+            "gap_prompt": "The sources in the record do not disagree about any medication."
+          },
+          {
+            "key": "drug_therapies.framework_note",
+            "label": "Framework note",
+            "ontology_match": ["chc.drug_therapies"],
+            "citation_required": true,
+            "renderer": "quote",
+            "gap_prompt": null
+          },
+          {
+            "key": "drug_therapies.suggested_level",
+            "label": "Suggested level (suggested, not determined — the MDT decides)",
+            "ontology_match": ["chc.drug_therapies"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "altered_consciousness",
+        "title": "Altered states of consciousness",
+        "slots": [
+          {
+            "key": "altered_consciousness.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.altered_consciousness"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No evidence in the record relates to this domain."
+          },
+          {
+            "key": "altered_consciousness.suggested_level",
+            "label": "Suggested level (this domain has no Severe level — it runs No needs to High, then Priority)",
+            "ontology_match": ["chc.altered_consciousness"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "other_significant",
+        "title": "Other significant care needs",
+        "slots": [
+          {
+            "key": "other_significant.evidence",
+            "label": "What the record shows",
+            "ontology_match": ["chc.other_significant"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No further needs in the record fall outside the eleven domains above."
+          },
+          {
+            "key": "other_significant.suggested_level",
+            "label": "Suggested level (suggested, not determined — the MDT decides)",
+            "ontology_match": ["chc.other_significant"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Not enough evidence to suggest a level."
+          }
+        ]
+      },
+      {
+        "key": "method",
+        "title": "How this pack was assembled",
+        "slots": [
+          {
+            "key": "method.provenance",
+            "label": "Provenance",
+            "ontology_match": [],
+            "citation_required": false,
+            "renderer": "prose",
+            "gap_prompt": null
+          },
+          {
+            "key": "method.gaps",
+            "label": "What is missing from the record",
+            "ontology_match": ["gap.*"],
+            "citation_required": true,
+            "renderer": "list",
+            "gap_prompt": "No gaps were detected in the record."
+          }
+        ]
+      }
+    ]
+  },
+
+  {
+    "key": "gp_brief_v1",
+    "title": "What I want to tell my doctor",
+    "audience": "General practitioner, in a ten-minute appointment",
+    "sections": [
+      {
+        "key": "purpose",
+        "title": "Why I am here",
+        "slots": [
+          {
+            "key": "reason",
+            "label": "Reason for this appointment",
+            "ontology_match": ["concern.primary", "medication.*", "instruction.*"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Tell us what you want to raise at this appointment."
+          }
+        ]
+      },
+      {
+        "key": "background",
+        "title": "Relevant history",
+        "slots": [
+          {
+            "key": "history",
+            "label": "What has happened",
+            "ontology_match": ["diagnosis.*", "result.*"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No history is recorded yet. Add a document or tell us what has happened."
+          },
+          {
+            "key": "changes",
+            "label": "What has changed recently",
+            "ontology_match": ["observation.*", "medication.*"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "Nothing in the record indicates a recent change."
+          }
+        ]
+      },
+      {
+        "key": "current",
+        "title": "Medicines",
+        "slots": [
+          {
+            "key": "medications",
+            "label": "What the record says about medicines",
+            "ontology_match": ["medication.*"],
+            "citation_required": true,
+            "renderer": "table",
+            "gap_prompt": "No medicines appear in the record. Add a prescription or repeat slip."
+          },
+          {
+            "key": "medication_conflicts",
+            "label": "Where the sources disagree",
+            "ontology_match": ["medication.*"],
+            "citation_required": true,
+            "renderer": "conflict",
+            "gap_prompt": "The sources agree about all medicines in the record."
+          }
+        ]
+      },
+      {
+        "key": "asks",
+        "title": "Questions I want answered",
+        "slots": [
+          {
+            "key": "questions",
+            "label": "Questions",
+            "ontology_match": ["conflict.*", "gap.*"],
+            "citation_required": true,
+            "renderer": "list",
+            "gap_prompt": "No questions have been generated yet."
+          },
+          {
+            "key": "outstanding",
+            "label": "Things the record says should have happened",
+            "ontology_match": ["gap.*", "instruction.*", "referral.*"],
+            "citation_required": true,
+            "renderer": "list",
+            "gap_prompt": "Nothing in the record is outstanding."
+          }
+        ]
+      },
+      {
+        "key": "attachments",
+        "title": "Documents I have brought",
+        "slots": [
+          {
+            "key": "documents",
+            "label": "Documents",
+            "ontology_match": ["source.inventory"],
+            "citation_required": false,
+            "renderer": "list",
+            "gap_prompt": "No documents have been added yet."
+          }
+        ]
+      }
+    ]
+  }
+]

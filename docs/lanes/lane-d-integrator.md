@@ -63,6 +63,8 @@ The payoff is real: with the offline shell plus `replay` mode, a dead venue netw
 - `/demo/revoke` — trigger consent revocation for Journey 4
 - `/demo/seed` — full seeded state including Juno history
 
+Seed `artifact_templates` from `fixtures/templates.json` — **never hand-write template SQL.** The JSON is the source of truth; the table is a copy of it.
+
 The orchestrator uses these constantly. Make them fast and idempotent.
 
 ### 6. Synthetic dataset

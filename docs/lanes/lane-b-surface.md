@@ -61,6 +61,10 @@ type ProvenanceTagProps =
 6. **Gaps panel** — each gap a statement about the record, with its own provenance
 7. **Artefact view** — CHC pack and GP brief, review-gate checkbox, print
 
+**Artefact layout is driven by `fixtures/templates.json`, not hardcoded.** Iterate sections and slots; switch the renderer on `slot.renderer` (`prose` | `list` | `table` | `conflict` | `quote`). When a slot has no matching assertion, render its `gap_prompt` in the ghost-card style — never blank space, never invented text.
+
+This matters for the pitch: adding a third gatekeeper in phase 2 must be a new object in that JSON plus a renderer, with no screen rewritten. If you find yourself writing `if (templateKey === 'chc_dst_pack_v1')`, stop — that is the wrong shape.
+
 ### Conflict card — the money moment
 
 Full width, 2.5rem padding, amber wash at 8%. Header in Fraunces 22px — the only place the serif appears mid-flow, deliberately, to slow the reader at the highest-stakes moment.
