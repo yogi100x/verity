@@ -170,7 +170,10 @@ describe('GET /api/debug/inspect — counts add up for both templates', () => {
         /data-slots-total="(\d+)" data-filled="(\d+)" data-verbatim-copy="(\d+)" data-gap-prompted="(\d+)" data-omitted="(\d+)"/g,
       ),
     ];
-    expect(cards).toHaveLength(2);
+    // One card per template row in fixtures/templates.json — three since S7
+    // added discharge_pack_v1. The route renders loadTemplates().map(...), so
+    // this count moving with the template file is itself the seed-row proof.
+    expect(cards).toHaveLength(3);
     for (const [, slotsTotalStr, filledStr, verbatimCopyStr, gapPromptedStr, omittedStr] of cards) {
       const slotsTotal = Number(slotsTotalStr);
       const filled = Number(filledStr);
@@ -219,7 +222,7 @@ describe('GET /api/debug/inspect — the structural slots the route now fills ar
   it('the named omissions on each card match its own omitted count', async () => {
     const artifactsSection = await getArtifactsSection();
     const cards = artifactsSection.split('<div class="artifact-card"').slice(1);
-    expect(cards).toHaveLength(2);
+    expect(cards).toHaveLength(3);
     for (const card of cards) {
       const omittedMatch = /data-omitted="(\d+)"/.exec(card);
       expect(omittedMatch).not.toBeNull();

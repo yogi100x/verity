@@ -439,5 +439,101 @@
         ]
       }
     ]
+  },
+
+  {
+    "key": "discharge_pack_v1",
+    "title": "After the hospital stay — what the records show",
+    "audience": "Family members and professionals supporting someone recently discharged from hospital",
+    "sections": [
+      {
+        "key": "what_changed",
+        "title": "What the records state",
+        "slots": [
+          {
+            "key": "what_changed.diagnosis",
+            "label": "Diagnoses the record states",
+            "ontology_match": ["diagnosis.*"],
+            "citation_required": true,
+            "renderer": "prose",
+            "gap_prompt": "No diagnosis is recorded. Add the discharge summary or a hospital clinic letter."
+          },
+          {
+            "key": "what_changed.results",
+            "label": "Test results the record states",
+            "ontology_match": ["result.*"],
+            "citation_required": true,
+            "renderer": "table",
+            "gap_prompt": "No test results are recorded. Ask the GP surgery or the ward for the blood results taken during the stay."
+          }
+        ]
+      },
+      {
+        "key": "medication_picture",
+        "title": "The reconciled medication picture",
+        "slots": [
+          {
+            "key": "medication_picture.current",
+            "label": "What the records now say about each medicine",
+            "ontology_match": ["medication.*"],
+            "citation_required": true,
+            "renderer": "table",
+            "gap_prompt": "No medicines appear in the record. Add a repeat prescription slip or the discharge medicines list."
+          },
+          {
+            "key": "medication_picture.disagreements",
+            "label": "Where the records disagree",
+            "ontology_match": ["conflict.*"],
+            "citation_required": true,
+            "renderer": "conflict",
+            "gap_prompt": "No unresolved disagreement is recorded."
+          }
+        ]
+      },
+      {
+        "key": "what_to_watch",
+        "title": "What to watch for",
+        "slots": [
+          {
+            "key": "what_to_watch.instructions",
+            "label": "Instructions the record gives",
+            "ontology_match": ["instruction.*"],
+            "citation_required": true,
+            "renderer": "list",
+            "gap_prompt": "No instructions are recorded. Add the discharge summary or the most recent clinic letter."
+          },
+          {
+            "key": "what_to_watch.observations",
+            "label": "Observations the record states",
+            "ontology_match": ["observation.*"],
+            "citation_required": true,
+            "renderer": "list",
+            "gap_prompt": "No observations are recorded. Add a care log, a home diary, or nursing notes."
+          }
+        ]
+      },
+      {
+        "key": "follow_up",
+        "title": "Who owes a follow-up",
+        "slots": [
+          {
+            "key": "follow_up.referrals",
+            "label": "Referrals the record names",
+            "ontology_match": ["referral.*"],
+            "citation_required": true,
+            "renderer": "list",
+            "gap_prompt": "No referrals are recorded. Add the discharge summary or any referral letter you were given."
+          },
+          {
+            "key": "follow_up.outstanding",
+            "label": "Outstanding items the record flags",
+            "ontology_match": ["gap.*"],
+            "citation_required": true,
+            "renderer": "list",
+            "gap_prompt": "No outstanding items have been flagged in the record."
+          }
+        ]
+      }
+    ]
   }
 ]
