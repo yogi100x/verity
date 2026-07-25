@@ -1,12 +1,14 @@
 import type { Artifact, ArtifactTemplate } from "@/lib/contracts";
+import { getActiveCaseId } from "@/components/data/activeCase";
 import { getCase, getTemplates } from "@/components/data/dal";
 import { ArtefactCard } from "@/components/artefacts/ArtefactCard";
 
 type ArtefactRow = { template: ArtifactTemplate; artifact: Artifact };
 
-export default function ArtefactsPage() {
+export default async function ArtefactsPage() {
+  const caseId = await getActiveCaseId();
   const templates = getTemplates();
-  const rows: ArtefactRow[] = getCase()
+  const rows: ArtefactRow[] = getCase(caseId)
     .artifacts.map((artifact) => {
       const template = templates.find((candidate) => candidate.key === artifact.template_key);
       return template ? { template, artifact } : null;

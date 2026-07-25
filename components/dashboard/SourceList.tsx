@@ -14,23 +14,26 @@
 import type { Claim, Source } from "@/lib/contracts";
 import { GhostCard } from "@/components/ui/GhostCard";
 import { SourceCard } from "@/components/dashboard/SourceCard";
+import { subjectPossessive, type Voice } from "@/components/voice/voice";
 
 export function SourceList({
   sources,
   claims,
   personName,
+  voice = "third",
 }: {
   sources: Source[];
   claims: Claim[];
   personName: string;
+  voice?: Voice;
 }) {
   if (sources.length === 0) {
     return (
       <GhostCard>
         Nothing added yet. Bring in a discharge summary, a prescription, a clinic
-        letter, or a recording — anything with {personName}&rsquo;s care on it —
-        and Verity will find what it says and check every quote against the
-        page.
+        letter, or a recording — anything with {subjectPossessive(voice, personName)}{" "}
+        care on it — and Verity will find what it says and check every quote
+        against the page.
       </GhostCard>
     );
   }

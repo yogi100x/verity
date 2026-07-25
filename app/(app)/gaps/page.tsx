@@ -1,9 +1,11 @@
+import { getActiveCaseId } from "@/components/data/activeCase";
 import { gapViews } from "@/components/data/dal";
 import { GapCard } from "@/components/gaps/GapCard";
 import { GhostCard } from "@/components/ui/GhostCard";
 
-export default function GapsPage() {
-  const gaps = gapViews();
+export default async function GapsPage() {
+  const caseId = await getActiveCaseId();
+  const gaps = gapViews(caseId);
 
   return (
     <div>

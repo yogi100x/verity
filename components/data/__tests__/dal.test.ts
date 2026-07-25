@@ -167,3 +167,58 @@ describe("dal", () => {
     expect(view.person.display_name).toBe("Margaret Ellis");
   });
 });
+
+describe("dal (case selection — stretch S1)", () => {
+  // Every selector takes an optional trailing caseId defaulting to
+  // 'margaret'. The tests above call every selector with zero arguments and
+  // must keep passing unchanged — that IS the "no breaking changes when the
+  // cookie is absent" contract. These tests cover the explicit-caseId path.
+  it("getCase('maya') resolves the self-serve account, distinct from margaret", () => {
+    const maya = getCase("maya");
+    expect(maya.person.display_name).toBe("Maya Okafor");
+    expect(maya.person.access_basis).toBe("self");
+    expect(maya.conflicts).toHaveLength(0);
+
+    const margaret = getCase("margaret");
+    expect(margaret.person.display_name).toBe("Margaret Ellis");
+    expect(margaret.person.id).not.toBe(maya.person.id);
+  });
+
+  it("getCase() with no argument still defaults to margaret", () => {
+    expect(getCase().person.display_name).toBe("Margaret Ellis");
+  });
+
+  it("getSources/getSource resolve within maya's case, not margaret's", () => {
+    const mayaSources = getSources("maya");
+    expect(mayaSources.length).toBeGreaterThan(0);
+    const first = mayaSources[0];
+    expect(getSource(first.id, "maya")).toEqual(first);
+    // A margaret-scoped lookup of a maya-only source id must not resolve.
+    expect(getSource(first.id, "margaret")).toBeUndefined();
+  });
+
+  it("timelineEvents('maya') resolves every event to exactly one provenance shape", () => {
+    const events = timelineEvents("maya");
+    expect(events.length).toBeGreaterThan(0);
+    for (const event of events) {
+      const hasCitation = "citation" in event.provenance;
+      const hasUserStated = "userStated" in event.provenance;
+      expect(hasCitation).toBe(!hasUserStated);
+    }
+  });
+
+  it("gapViews('maya') resolves maya's referral-without-outcome gap", () => {
+    const views = gapViews("maya");
+    expect(views.length).toBeGreaterThan(0);
+    expect(views.some((v) => v.detector === "referral_without_outcome")).toBe(true);
+  });
+
+  it("artifactView('gp_brief_v1', 'maya') renders maya's own facts, not margaret's", () => {
+    const view = artifactView("gp_brief_v1", "maya");
+    expect(view.person.display_name).toBe("Maya Okafor");
+    const reasonSlot = view.sections
+      .flatMap((s) => s.slots)
+      .find((s) => s.slot.key === "reason");
+    expect(reasonSlot?.hasContent).toBe(true);
+  });
+});

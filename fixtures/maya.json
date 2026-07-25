@@ -1,0 +1,336 @@
+{
+  "person": {
+    "id": "d0000000-0000-4000-8000-000000000001",
+    "display_name": "Maya Okafor",
+    "access_basis": "self"
+  },
+
+  "sources": [
+    {
+      "id": "d1000000-0000-4000-8000-000000000001",
+      "person_id": "d0000000-0000-4000-8000-000000000001",
+      "kind": "pdf",
+      "title": "MRI report — right ankle",
+      "storage_path": "demo/maya/01-mri-report.pdf",
+      "transcript": "MUSCULOSKELETAL IMAGING REPORT. Patient: Maya Okafor. Date of scan: 29 July 2025. Referring clinician: Dr S. Whitfield, GP. CLINICAL HISTORY: Persistent right ankle discomfort following previous inversion injury. FINDINGS: Mild signal alteration involving the anterior talofibular ligament. Small joint effusion. No acute fracture identified. IMPRESSION: Appearances consistent with chronic ligamentous change rather than acute injury. RECOMMENDATION: Clinical correlation advised. Referral for physiotherapy assessment recommended if symptoms persist.",
+      "transcript_confidence": 0.96,
+      "author_member_id": null,
+      "created_at": "2025-07-30T10:05:00Z"
+    },
+    {
+      "id": "d1000000-0000-4000-8000-000000000002",
+      "person_id": "d0000000-0000-4000-8000-000000000001",
+      "kind": "pdf",
+      "title": "Physiotherapy assessment letter",
+      "storage_path": "demo/maya/02-physio-letter.pdf",
+      "transcript": "BRIDGEWATER PHYSIOTHERAPY CLINIC. RE: Maya Okafor. Assessment date: 14 August 2025. Dear Dr Whitfield, Thank you for referring Maya Okafor for physiotherapy assessment of chronic right ankle instability. Maya reports recurring swelling after walking and intermittent tightness after around fifteen minutes on their feet. On examination there is mild residual swelling and reduced proprioception on the right side compared to the left. PLAN: Home exercise programme focusing on peroneal strengthening and proprioception, to be reviewed in three weeks. Reviewed once on 2 September 2025 with some improvement reported. Attendance then lapsed. Yours sincerely, J. Okonkwo, Physiotherapist.",
+      "transcript_confidence": 0.93,
+      "author_member_id": null,
+      "created_at": "2025-09-03T08:40:00Z"
+    }
+  ],
+
+  "claims": [
+    {
+      "id": "d2000000-0000-4000-8000-000000000001",
+      "source_id": "d1000000-0000-4000-8000-000000000001",
+      "ontology_key": "diagnosis.ankle_ligament",
+      "subject": "right ankle ligament",
+      "value": "mild signal alteration, anterior talofibular ligament",
+      "quote": "Mild signal alteration involving the anterior talofibular ligament.",
+      "locator": { "page": 1, "char_start": 223, "char_end": 290, "ms_start": null, "ms_end": null },
+      "asserted_at": "2025-07-29",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000002",
+      "source_id": "d1000000-0000-4000-8000-000000000001",
+      "ontology_key": "observation.joint_effusion",
+      "subject": "joint effusion",
+      "value": "small effusion present",
+      "quote": "Small joint effusion.",
+      "locator": { "page": 1, "char_start": 291, "char_end": 312, "ms_start": null, "ms_end": null },
+      "asserted_at": "2025-07-29",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000003",
+      "source_id": "d1000000-0000-4000-8000-000000000001",
+      "ontology_key": "result.fracture",
+      "subject": "fracture",
+      "value": "none identified",
+      "quote": "No acute fracture identified.",
+      "locator": { "page": 1, "char_start": 313, "char_end": 342, "ms_start": null, "ms_end": null },
+      "asserted_at": "2025-07-29",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000004",
+      "source_id": "d1000000-0000-4000-8000-000000000001",
+      "ontology_key": "referral.physiotherapy",
+      "subject": "physiotherapy referral",
+      "value": "recommended if symptoms persist",
+      "quote": "Referral for physiotherapy assessment recommended if symptoms persist.",
+      "locator": { "page": 1, "char_start": 482, "char_end": 552, "ms_start": null, "ms_end": null },
+      "asserted_at": "2025-07-29",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000005",
+      "source_id": "d1000000-0000-4000-8000-000000000002",
+      "ontology_key": "observation.ankle_swelling",
+      "subject": "ankle swelling",
+      "value": "recurring after walking, tightness after ~15 minutes",
+      "quote": "Maya reports recurring swelling after walking and intermittent tightness after around fifteen minutes on their feet.",
+      "locator": { "page": 1, "char_start": 204, "char_end": 320, "ms_start": null, "ms_end": null },
+      "asserted_at": "2025-08-14",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000006",
+      "source_id": "d1000000-0000-4000-8000-000000000002",
+      "ontology_key": "assessment.proprioception",
+      "subject": "proprioception",
+      "value": "reduced on right side vs left",
+      "quote": "reduced proprioception on the right side compared to the left.",
+      "locator": { "page": 1, "char_start": 372, "char_end": 434, "ms_start": null, "ms_end": null },
+      "asserted_at": "2025-08-14",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000007",
+      "source_id": "d1000000-0000-4000-8000-000000000002",
+      "ontology_key": "treatment.physiotherapy_plan",
+      "subject": "physiotherapy plan",
+      "value": "home exercise programme, review in 3 weeks",
+      "quote": "Home exercise programme focusing on peroneal strengthening and proprioception, to be reviewed in three weeks.",
+      "locator": { "page": 1, "char_start": 441, "char_end": 550, "ms_start": null, "ms_end": null },
+      "asserted_at": "2025-08-14",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000008",
+      "source_id": "d1000000-0000-4000-8000-000000000002",
+      "ontology_key": "admin.physio_attendance",
+      "subject": "physiotherapy attendance",
+      "value": "lapsed after single review",
+      "quote": "Reviewed once on 2 September 2025 with some improvement reported. Attendance then lapsed.",
+      "locator": { "page": 1, "char_start": 551, "char_end": 640, "ms_start": null, "ms_end": null },
+      "asserted_at": "2025-09-02",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000009",
+      "source_id": "d1000000-0000-4000-8000-000000000002",
+      "ontology_key": "medication.ibuprofen",
+      "subject": "ibuprofen",
+      "value": "400mg three times daily, prescribed for pain relief",
+      "quote": "Ibuprofen 400mg three times daily was prescribed for pain relief.",
+      "locator": { "page": 1, "char_start": 50, "char_end": 118, "ms_start": null, "ms_end": null },
+      "asserted_at": "2025-08-14",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": false
+    }
+  ],
+
+  "facts": [
+    {
+      "id": "d3000000-0000-4000-8000-000000000001",
+      "person_id": "d0000000-0000-4000-8000-000000000001",
+      "ontology_key": "diagnosis.ankle_ligament",
+      "subject": "right ankle ligament",
+      "canonical_value": "Mild signal alteration to the anterior talofibular ligament, small effusion, no fracture (imaging 29 July 2025)",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2025-07-29",
+      "valid_to": null,
+      "supporting_claim_ids": [
+        "d2000000-0000-4000-8000-000000000001",
+        "d2000000-0000-4000-8000-000000000002",
+        "d2000000-0000-4000-8000-000000000003"
+      ],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "d3000000-0000-4000-8000-000000000002",
+      "person_id": "d0000000-0000-4000-8000-000000000001",
+      "ontology_key": "referral.physiotherapy",
+      "subject": "physiotherapy referral",
+      "canonical_value": "Physiotherapy assessment recommended if symptoms persist (imaging 29 July 2025)",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2025-07-29",
+      "valid_to": null,
+      "supporting_claim_ids": ["d2000000-0000-4000-8000-000000000004"],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "d3000000-0000-4000-8000-000000000003",
+      "person_id": "d0000000-0000-4000-8000-000000000001",
+      "ontology_key": "observation.ankle_swelling",
+      "subject": "ankle swelling",
+      "canonical_value": "Recurring swelling after walking, intermittent tightness after around fifteen minutes (physiotherapy assessment 14 August 2025)",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2025-08-14",
+      "valid_to": null,
+      "supporting_claim_ids": ["d2000000-0000-4000-8000-000000000005"],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "d3000000-0000-4000-8000-000000000004",
+      "person_id": "d0000000-0000-4000-8000-000000000001",
+      "ontology_key": "assessment.proprioception",
+      "subject": "proprioception",
+      "canonical_value": "Reduced proprioception on the right side compared to the left (14 August 2025)",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2025-08-14",
+      "valid_to": null,
+      "supporting_claim_ids": ["d2000000-0000-4000-8000-000000000006"],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "d3000000-0000-4000-8000-000000000005",
+      "person_id": "d0000000-0000-4000-8000-000000000001",
+      "ontology_key": "treatment.physiotherapy_plan",
+      "subject": "physiotherapy plan",
+      "canonical_value": "Home exercise programme — peroneal strengthening and proprioception, reviewed in three weeks",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2025-08-14",
+      "valid_to": null,
+      "supporting_claim_ids": ["d2000000-0000-4000-8000-000000000007"],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "d3000000-0000-4000-8000-000000000006",
+      "person_id": "d0000000-0000-4000-8000-000000000001",
+      "ontology_key": "admin.physio_attendance",
+      "subject": "physiotherapy attendance",
+      "canonical_value": "Reviewed once on 2 September 2025 with improvement reported; attendance then lapsed",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2025-09-02",
+      "valid_to": null,
+      "supporting_claim_ids": ["d2000000-0000-4000-8000-000000000008"],
+      "conflict_id": null,
+      "superseded_by": null
+    }
+  ],
+
+  "conflicts": [],
+
+  "gaps": [
+    {
+      "id": "d4000000-0000-4000-8000-000000000001",
+      "person_id": "d0000000-0000-4000-8000-000000000001",
+      "detector": "referral_without_outcome",
+      "statement": "The imaging report of 29 July 2025 recommended a physiotherapy referral if symptoms persisted. Physiotherapy contact is recorded, but attendance lapsed after the review of 2 September 2025 and no discharge outcome or final assessment appears in the record.",
+      "supporting_claim_ids": [
+        "d2000000-0000-4000-8000-000000000004",
+        "d2000000-0000-4000-8000-000000000008"
+      ],
+      "suggested_next_document": "Physiotherapy discharge summary or final assessment letter"
+    }
+  ],
+
+  "artifacts": [
+    {
+      "id": "d5000000-0000-4000-8000-000000000001",
+      "person_id": "d0000000-0000-4000-8000-000000000001",
+      "template_key": "gp_brief_v1",
+      "user_verified": false,
+      "created_at": "2026-07-22T09:30:00Z",
+      "assertions": [
+        {
+          "id": "d6000000-0000-4000-8000-000000000001",
+          "artifact_id": "d5000000-0000-4000-8000-000000000001",
+          "slot_key": "reason",
+          "text": "I've had recurring right ankle swelling since a previous inversion injury, confirmed on imaging in July 2025. Physiotherapy was arranged but contact lapsed after one review.",
+          "fact_ids": [
+            "d3000000-0000-4000-8000-000000000001",
+            "d3000000-0000-4000-8000-000000000006"
+          ],
+          "citation_verified": true
+        },
+        {
+          "id": "d6000000-0000-4000-8000-000000000002",
+          "artifact_id": "d5000000-0000-4000-8000-000000000001",
+          "slot_key": "history",
+          "text": "Imaging in July 2025 showed mild signal alteration in the ankle ligament with a small joint effusion and no fracture. A physiotherapy assessment in August 2025 found reduced proprioception on the right side.",
+          "fact_ids": [
+            "d3000000-0000-4000-8000-000000000001",
+            "d3000000-0000-4000-8000-000000000004"
+          ],
+          "citation_verified": true
+        },
+        {
+          "id": "d6000000-0000-4000-8000-000000000003",
+          "artifact_id": "d5000000-0000-4000-8000-000000000001",
+          "slot_key": "changes",
+          "text": "Physiotherapy review on 2 September 2025 reported some improvement, but attendance lapsed after that visit.",
+          "fact_ids": ["d3000000-0000-4000-8000-000000000006"],
+          "citation_verified": true
+        },
+        {
+          "id": "d6000000-0000-4000-8000-000000000004",
+          "artifact_id": "d5000000-0000-4000-8000-000000000001",
+          "slot_key": "medication_conflicts",
+          "text": "",
+          "fact_ids": [],
+          "citation_verified": false
+        },
+        {
+          "id": "d6000000-0000-4000-8000-000000000005",
+          "artifact_id": "d5000000-0000-4000-8000-000000000001",
+          "slot_key": "questions",
+          "text": "The imaging report recommended physiotherapy assessment if symptoms persisted. Physiotherapy contact lapsed after a single review. Should physiotherapy be restarted, or is a fresh assessment needed?",
+          "fact_ids": [
+            "d3000000-0000-4000-8000-000000000002",
+            "d3000000-0000-4000-8000-000000000006"
+          ],
+          "citation_verified": true
+        },
+        {
+          "id": "d6000000-0000-4000-8000-000000000006",
+          "artifact_id": "d5000000-0000-4000-8000-000000000001",
+          "slot_key": "outstanding",
+          "text": "A physiotherapy discharge summary or final assessment letter is not recorded after the review of 2 September 2025.",
+          "fact_ids": [
+            "d3000000-0000-4000-8000-000000000002",
+            "d3000000-0000-4000-8000-000000000006"
+          ],
+          "citation_verified": true
+        }
+      ]
+    }
+  ],
+
+  "stats": {
+    "claims_extracted": 9,
+    "claims_dropped": 1
+  }
+}

@@ -13,7 +13,8 @@ import {
   CHC_DOMAIN_NAMES,
   isValidLevel,
 } from '../contracts';
-import fixture from '../../fixtures/margaret.json';
+import margaretFixture from '../../fixtures/margaret.json';
+import mayaFixture from '../../fixtures/maya.json';
 
 function normalise(s: string): string {
   return s
@@ -26,7 +27,21 @@ function normalise(s: string): string {
     .toLowerCase();
 }
 
-describe('contract', () => {
+/**
+ * Every fixture in this list must satisfy the full keystone contract — the
+ * shared assertions below run once per fixture via describe.each. Maya
+ * (stretch S1, self-serve mode) is the degenerate carer case: same contract,
+ * same rigour, no weakened assertions. Anything that is legitimately true of
+ * one fixture but not the other (e.g. margaret's conflict, margaret's second
+ * template) lives in its own fixture-specific describe block further down —
+ * never folded into the shared block as an "if fixture is X" branch.
+ */
+const FIXTURES = [
+  { name: 'margaret', fixture: margaretFixture },
+  { name: 'maya', fixture: mayaFixture },
+];
+
+describe.each(FIXTURES)('contract ($name)', ({ fixture }) => {
   it('fixture conforms to CaseSnapshot', () => {
     expect(() => CaseSnapshot.parse(fixture)).not.toThrow();
   });
@@ -109,14 +124,35 @@ describe('contract', () => {
     }
   });
 
+  it('no key anywhere is a clinical judgement field', () => {
+    // 'priority' as a CHC *level value* is legal. A judgement FIELD is not.
+    const banned = /severity|urgency|\brank\b|\brisk\b|\bscore\b/i;
+    const keys = JSON.stringify(fixture).match(/"[a-z_]+":/gi) ?? [];
+    for (const k of keys) expect(banned.test(k), 'banned key ' + k).toBe(false);
+  });
+});
+
+describe('contract (margaret-specific)', () => {
+  // Margaret is the carer-mode fixture and the only one seeded with a
+  // conflict and a second (CHC) template. Maya legitimately has zero
+  // conflicts and only the gp_brief_v1 artefact — that is not a weaker
+  // fixture, it is a different shape of case, so these assertions stay
+  // scoped to margaret rather than being loosened for everyone.
   it('both phase-1 templates render from the same fact store', () => {
-    const snap = CaseSnapshot.parse(fixture);
+    const snap = CaseSnapshot.parse(margaretFixture);
     const keys = snap.artifacts.map((a) => a.template_key);
     expect(keys).toContain('chc_dst_pack_v1');
     expect(keys).toContain('gp_brief_v1');
   });
 
-  it('CHC domain levels match the Decision Support Tool', () => {
+  it('has at least one conflict exercising the disagreement path', () => {
+    const snap = CaseSnapshot.parse(margaretFixture);
+    expect(snap.conflicts.length).toBeGreaterThan(0);
+  });
+});
+
+describe('CHC domain levels', () => {
+  it('match the Decision Support Tool', () => {
     // Three domains cap at High.
     expect(isValidLevel('continence', 'severe')).toBe(false);
     expect(isValidLevel('communication', 'severe')).toBe(false);
@@ -137,12 +173,5 @@ describe('contract', () => {
       expect(CHC_DOMAIN_NAMES[d]).toBeTruthy();
       expect(CHC_DOMAIN_LEVELS[d].length).toBeGreaterThan(0);
     }
-  });
-
-  it('no key anywhere is a clinical judgement field', () => {
-    // 'priority' as a CHC *level value* is legal. A judgement FIELD is not.
-    const banned = /severity|urgency|\brank\b|\brisk\b|\bscore\b/i;
-    const keys = JSON.stringify(fixture).match(/"[a-z_]+":/gi) ?? [];
-    for (const k of keys) expect(banned.test(k), 'banned key ' + k).toBe(false);
   });
 });
