@@ -1,0 +1,76 @@
+components/upload/UploadView.tsx
+  s_afabf214a6fe93::t_90d5ca23c61a9b 6,8,11,14-25,34,36-37
+  s_afabf214a6fe93::t_1985c414d5a9ae 54
+components/upload/useUploadSimulation.ts
+  s_afabf214a6fe93::t_efa3eb3b263f85 93,96,99,109,116
+  s_afabf214a6fe93::t_1d2c97918cfc7a 167
+  s_afabf214a6fe93::t_1c1f9f02be6abb 154
+  s_afabf214a6fe93::t_23be0a43e7747f 46-70
+components/upload/__tests__/live-driver.test.ts
+  s_afabf214a6fe93::t_ba7a912fe08eee 1-101,130-175,220
+  s_afabf214a6fe93::t_0ceab5e78007f1 176-219
+  s_afabf214a6fe93::t_b16b2a7ad61ccd 102-129
+components/dictation/__tests__/mic-button.test.tsx
+  s_afabf214a6fe93::t_5c96e33ef6b787 172-197
+lib/ai/__tests__/extract-persistence.test.ts
+  s_afabf214a6fe93::t_e7f6d96eac1ae8 1,3-32,38-330,346-355,357-420,451-498,520-560,570-571
+  s_afabf214a6fe93::t_4417ce6c583a51 33-37
+  s_afabf214a6fe93::t_4a90adc8b52f2d 331-342,344-345
+  s_afabf214a6fe93::t_7952c6ce71ecd4 421-450
+  s_afabf214a6fe93::t_e854623a2cd959 499-519
+  s_afabf214a6fe93::t_c3f00267c5dde1 561-569
+  s_afabf214a6fe93::t_874b627f90cb15 343
+  s_afabf214a6fe93::t_974774c98452ea 356
+  s_afabf214a6fe93::t_0f8f002de595e3 2
+components/upload/FileProgressRow.tsx
+  s_afabf214a6fe93::t_79380027caf741 35-47
+components/dictation/useDictation.ts
+  s_afabf214a6fe93::t_de7810d29f1c4c 83
+  s_afabf214a6fe93::t_d005a460c819a3 38-45
+  s_afabf214a6fe93::t_ee55dcae37bcf2 169-172,174
+  s_afabf214a6fe93::t_9c1b6189cb6bcf 23
+  s_afabf214a6fe93::t_b78c1a3b378501 99,103
+components/upload/__tests__/upload.test.tsx
+  s_afabf214a6fe93::t_d5030fe86948ec 146-149
+  s_afabf214a6fe93::t_a7c59986a4de2d 128-145,150-173,194
+  s_afabf214a6fe93::t_4fce676030a8df 174-193
+  s_afabf214a6fe93::t_699b1fd6cb64ef 21
+  s_afabf214a6fe93::t_04102f34bf02da 24-32
+components/upload/liveDriver.ts
+  s_afabf214a6fe93::t_890af07ccc0dcf 1-12,24-51,54-118,120-146
+  s_afabf214a6fe93::t_39cc0cfe0e8290 52-53
+  s_afabf214a6fe93::t_e71a696241f46a 119
+  s_afabf214a6fe93::t_c45f7a1245e623 13-23
+components/dictation/MicButton.tsx
+  s_afabf214a6fe93::t_1c9845992ff1f6 87-88
+  s_afabf214a6fe93::t_3c63d7b57e0bd5 45,52-53
+app/(app)/upload/page.tsx
+  s_afabf214a6fe93::t_a72a76d0090616 4,16-21,23-31,35
+app/api/extract/route.ts
+  s_afabf214a6fe93::t_3c9573e8f25e26 71-77
+  s_afabf214a6fe93::t_cf4ac542b59a74 160-162,179
+  s_afabf214a6fe93::t_d8cf5cd996ed12 287-294
+  s_afabf214a6fe93::t_242066c387021f 204-206,212
+  s_afabf214a6fe93::t_6651493e7f2642 333-351,365-372,378,383-401,406-407
+  s_afabf214a6fe93::t_26547ee386f08c 42
+  s_afabf214a6fe93::t_06bf1253b324d0 106
+  s_afabf214a6fe93::t_11ec8cb04f1602 244-250
+  s_afabf214a6fe93::t_39cf05a971031c 16-38,43,45,52,54-56,60-70,78-105,107-159,163-178,180-203,207-211,213-243,251-260
+  s_afabf214a6fe93::t_5d98e2e0b5c29e 261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "f03552d8f4c49eb046534cdf0f2bb06152bddad6",
+  "prompts": {},
+  "sessions": {
+    "s_afabf214a6fe93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c999a24-05c7-418e-a055-0e42e33d7f6d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    }
+  }
+}
