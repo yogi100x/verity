@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
 import { createInMemoryFixtureStore, requestHash, type ModelRequest, type ModelTransport } from '@/lib/modes';
 import { callForcedTool, ToolCallFailedError, type CallSeamOptions } from '@/lib/ai/client';
-import { MODELS, MIN_THINKING_BUDGET, modelParams } from '@/lib/ai/models';
+import { MODELS, modelParams } from '@/lib/ai/models';
 import { EXTRACTION_TOOL } from '@/lib/ai/prompts';
 import { extractSourceLive, type RawClaim } from '@/lib/ai/extract';
 import type { SourceInput } from '@/lib/ai/documents';
@@ -142,26 +142,26 @@ describe('modelParams — adaptive family (Sonnet 5, Opus 5)', () => {
 });
 
 describe('modelParams — budget family (Haiku 4.5)', () => {
-  it('sends budget_tokens and no effort', () => {
+  // These assertions INVERTED on live evidence. The registry originally sent
+  // `thinking: {type:'enabled', budget_tokens}` for Haiku, and the first real
+  // Haiku call returned 400: "Thinking may not be enabled when tool_choice
+  // forces tool use." Every Lane A call forces a tool, so Haiku requests must
+  // omit `thinking` entirely — which on a pre-adaptive model means no
+  // extended thinking, legal under forced tool use.
+  it('omits thinking entirely — forced tool use forbids enabled-type thinking', () => {
     const params = modelParams(MODELS.haiku, { effort: 'high', maxTokens: 16000 });
-    expect(params.thinking).toEqual({ type: 'enabled', budget_tokens: 8000 });
+    expect(params.thinking).toBeUndefined();
+    expect(Object.keys(params)).not.toContain('thinking');
+    expect(keysOf(params).has('budget_tokens')).toBe(false);
     expect(params.output_config).toBeUndefined();
   });
 
-  it('keeps budget_tokens strictly below max_tokens at every size', () => {
-    for (const maxTokens of [1025, 1200, 2048, 4096, 16000, 64000]) {
+  it('never emits budget_tokens at any size', () => {
+    for (const maxTokens of [512, 1024, 2048, 16000, 64000]) {
       const params = modelParams(MODELS.haiku, { maxTokens });
-      if (!('budget_tokens' in params.thinking)) throw new Error('expected a budget');
-      expect(params.thinking.budget_tokens).toBeLessThan(maxTokens);
-      expect(params.thinking.budget_tokens).toBeGreaterThanOrEqual(MIN_THINKING_BUDGET);
+      expect(keysOf(params).has('budget_tokens'), `maxTokens ${maxTokens}`).toBe(false);
+      expect(params.max_tokens).toBe(maxTokens);
     }
-  });
-
-  it('throws rather than emitting budget_tokens >= max_tokens', () => {
-    // Clamping up to the 1024 floor without checking max_tokens is exactly how
-    // a 400 gets shipped; the floor cannot be honoured below it.
-    expect(() => modelParams(MODELS.haiku, { maxTokens: 1024 })).toThrow(RangeError);
-    expect(() => modelParams(MODELS.haiku, { maxTokens: 512 })).toThrow(RangeError);
   });
 });
 

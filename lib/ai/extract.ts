@@ -23,6 +23,7 @@ import { EXTRACTION_SYSTEM, EXTRACTION_TOOL } from '@/lib/ai/prompts';
 import { MODELS } from '@/lib/ai/models';
 import { contentBlocksFor, type SourceInput } from '@/lib/ai/documents';
 import { anchorClaim, type AnchorFailure } from '@/lib/ai/verify';
+import { resolveClaimDates } from '@/lib/ai/dates';
 import type { Mode } from '@/lib/modes';
 import fixtureRaw from '@/fixtures/margaret.json';
 
@@ -368,9 +369,20 @@ function honestNotice(best: Extract<Attempt, { kind: 'ok' }>, title: string): st
  * key would produce one.
  */
 export async function extractSourceLive(
-  source: Pick<Source, 'id' | 'title' | 'kind'>,
+  source: Pick<Source, 'id' | 'title' | 'kind'> & {
+    /** Slice(0, 10) of this is the date-resolution pass's reference date —
+     *  optional because not every caller has it yet (no upload registry
+     *  exists in this lane; see `app/api/extract/route.ts`). Without it the
+     *  pass is simply skipped, never a wall-clock fallback. A value whose
+     *  first ten characters are not a real ISO calendar date is refused by
+     *  `resolveClaimDates` itself, which then changes nothing. */
+    readonly created_at?: string;
+  },
   input: SourceInput,
   opts: CallSeamOptions,
+  /** Defaulted ON. The only way to turn the post-pass off is `resolveDates:
+   *  false` — tests use this to isolate extraction from date resolution. */
+  dateOpts?: { readonly resolveDates?: boolean },
 ): Promise<ExtractionReport> {
   let best = await attempt(source, input, opts);
   let retried = false;
@@ -406,10 +418,24 @@ export async function extractSourceLive(
 
   const stillBad = shouldRetry(best.raw.length, best.dropped.length);
 
+  // Post-pass, over KEPT claims only — dropped claims never had a verified
+  // quote to begin with, so there is nothing here for date resolution to
+  // anchor against. Runs through `callModel` in every mode like every other
+  // Lane A call; in fixtures/replay a miss leaves `kept` untouched. Degrades
+  // silently: on any failure the pass reports back the input unchanged, so
+  // the report below is exactly what it would have been without this call —
+  // see `resolveClaimDates`'s own contract in `lib/ai/dates.ts`.
+  let kept: readonly Claim[] = best.kept;
+  if ((dateOpts?.resolveDates ?? true) && source.created_at !== undefined && kept.length > 0) {
+    const referenceDate = source.created_at.slice(0, 10);
+    const dateResult = await resolveClaimDates({ claims: kept, referenceDate }, opts);
+    kept = dateResult.claims;
+  }
+
   return {
     source: { id: source.id, title: source.title, kind: source.kind },
     transcript: best.transcript,
-    kept: best.kept,
+    kept,
     dropped: best.dropped,
     stats: { claims_extracted: best.raw.length, claims_dropped: best.dropped.length },
     usage: best.usage,
@@ -503,7 +529,11 @@ export async function extractAll(
   seamOpts?: ExtractAllSeamOptions,
   live?: {
     readonly sources: ReadonlyArray<{
-      readonly source: Pick<Source, 'id' | 'title' | 'kind'>;
+      /** `created_at` is optional and threaded straight through: when a caller
+       *  knows when the document itself was written, `extractSourceLive` runs
+       *  the date-resolution post-pass against it. When it does not, the pass
+       *  is skipped — never a wall-clock substitute. */
+      readonly source: Pick<Source, 'id' | 'title' | 'kind'> & { readonly created_at?: string };
       readonly input: SourceInput;
     }>;
   },
