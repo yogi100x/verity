@@ -1,6 +1,6 @@
 /**
  * ClockCard renders the CHC 28-day clock statement (lib/detectors/chc_clock.ts)
- * plus a "Draft chase letter" button that opens the existing S3 LetterModal
+ * plus a "Prepare follow-up letter" button that opens the existing S3 LetterModal
  * with the pre-generated chase letter. Mirrors gap-card.test.tsx /
  * letter-modal.test.tsx: the card authors no prose of its own, so every
  * assertion below compares rendered output against `chcDeadlines`'s own
@@ -109,11 +109,11 @@ describe("ClockCard", () => {
     expect(screen.getByText(deadline!.statement)).toBeInTheDocument();
   });
 
-  it('renders a "Draft chase letter" button whose label is free of banned vocabulary', () => {
+  it('renders a "Prepare follow-up letter" button whose label is free of banned vocabulary', () => {
     const now = new Date("2026-07-25T00:00:00.000Z");
     const [deadline] = chcDeadlines([checklistFact()], now);
     render(<ClockCard statement={deadline!.statement} letter={deadline!.chase_letter} />);
-    const button = screen.getByRole("button", { name: "Draft chase letter" });
+    const button = screen.getByRole("button", { name: "Prepare follow-up letter" });
     expect(button).toBeInTheDocument();
     expect(button.textContent ?? "").not.toMatch(BANNED_LABEL_WORDS);
   });
@@ -125,13 +125,13 @@ describe("ClockCard", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Draft chase letter" }));
+    fireEvent.click(screen.getByRole("button", { name: "Prepare follow-up letter" }));
 
     // LetterModal takes an optional `title` (default "Draft request letter",
     // preserved for every GapCard call site). ClockCard passes "Draft chase
     // letter" so the heading matches the chase letter it is actually showing,
     // not the request-letter default.
-    const dialog = screen.getByRole("dialog", { name: "Draft chase letter" });
+    const dialog = screen.getByRole("dialog", { name: "Prepare follow-up letter" });
     expect(dialog).toBeInTheDocument();
 
     const letterText = screen.getByTestId("letter-text");
@@ -150,7 +150,7 @@ describe("ClockCard", () => {
     const [deadline] = chcDeadlines([checklistFact()], now);
     render(<ClockCard statement={deadline!.statement} letter={deadline!.chase_letter} />);
 
-    const trigger = screen.getByRole("button", { name: "Draft chase letter" });
+    const trigger = screen.getByRole("button", { name: "Prepare follow-up letter" });
     fireEvent.click(trigger);
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
 
@@ -186,7 +186,7 @@ describe("ClockCard", () => {
     // classes too, not just the card shell and the button.
     const earlyStatementClasses = early.container.querySelector("p")?.className;
     const earlyButtonClasses = screen.getByRole("button", {
-      name: "Draft chase letter",
+      name: "Prepare follow-up letter",
     }).className;
     early.unmount();
 
@@ -196,7 +196,7 @@ describe("ClockCard", () => {
     const lateCardClasses = late.container.firstElementChild?.className;
     const lateStatementClasses = late.container.querySelector("p")?.className;
     const lateButtonClasses = screen.getByRole("button", {
-      name: "Draft chase letter",
+      name: "Prepare follow-up letter",
     }).className;
     late.unmount();
 
@@ -233,7 +233,7 @@ describe("GapsPage clock section", () => {
     // The statement paragraph renders the generator's string verbatim…
     expect(screen.getByText(pattern)).toBeInTheDocument();
     // …with its chase-letter trigger, and the gap list still renders below.
-    expect(screen.getByRole("button", { name: "Draft chase letter" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare follow-up letter" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Gaps" })).toBeInTheDocument();
   });
 
@@ -243,10 +243,10 @@ describe("GapsPage clock section", () => {
 
     // The gaps heading still renders — the page did not throw.
     expect(screen.getByRole("heading", { name: "Gaps" })).toBeInTheDocument();
-    // No "Draft chase letter" button anywhere: the synthetic facts yield
+    // No "Prepare follow-up letter" button anywhere: the synthetic facts yield
     // zero ChcDeadline entries, so ClockCard never mounts. (The gap cards'
     // own "Draft request letter" buttons are unaffected and out of scope
     // here — covered by letter-modal.test.tsx.)
-    expect(screen.queryByRole("button", { name: "Draft chase letter" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Prepare follow-up letter" })).not.toBeInTheDocument();
   });
 });

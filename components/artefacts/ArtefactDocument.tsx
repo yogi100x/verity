@@ -15,6 +15,7 @@ import { useState } from "react";
 import { footer } from "@/lib/copy/safety";
 import type { ArtifactView } from "@/components/data/dal";
 import { ArtefactSection } from "./ArtefactSection";
+import { ArtefactSummaryHeader } from "./ArtefactSummaryHeader";
 import { AttendanceAllowanceLine } from "./AttendanceAllowanceLine";
 import { ReviewGate } from "./ReviewGate";
 
@@ -54,13 +55,7 @@ export function ArtefactDocument({
         <p className="mt-2 text-body-s text-ink-secondary">{view.audience}</p>
       </header>
 
-      <ReviewGate
-        reviewed={reviewed}
-        onReviewedChange={setReviewed}
-        reviewerName={reviewerName}
-        onReviewerNameChange={setReviewerName}
-        personId={view.person.id}
-      />
+      <ArtefactSummaryHeader view={view} />
 
       <div className="print-columns space-y-12">
         {view.sections.map((section) => (
@@ -71,6 +66,13 @@ export function ArtefactDocument({
       {showAttendanceAllowance && (
         <AttendanceAllowanceLine personName={view.person.display_name} />
       )}
+
+      <ReviewGate
+        reviewed={reviewed}
+        onReviewedChange={setReviewed}
+        reviewerName={reviewerName}
+        onReviewerNameChange={setReviewerName}
+      />
 
       <footer className="print-footer print-avoid-break mt-12 border-t border-hairline pt-6 text-body-s text-ink-secondary">
         {/* Slot-filled from lib/copy/safety.ts — Lane C pins this template

@@ -46,6 +46,16 @@ export default function RootLayout({
       className={`${fraunces.variable} ${publicSans.variable} ${plexMono.variable} h-full`}
     >
       <body className="min-h-full flex flex-col">
+        {/* Skip link — first focusable element on every page (NHS service
+            manual accessibility guidance). Visually hidden until focused;
+            jumps keyboard and screen-reader users past the banner and nav
+            straight to the page's main content. */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-card focus:bg-surface focus:px-4 focus:py-2 focus:text-body focus:text-ink focus:outline focus:outline-2 focus:outline-brand"
+        >
+          Skip to main content
+        </a>
         <SwRegistration />
         <SafetyBanner />
         <div className="flex-1 flex flex-col">{children}</div>

@@ -84,8 +84,8 @@ describe("LetterModal", () => {
   });
 
   it("uses the optional title prop as the dialog heading (chase-letter reuse)", () => {
-    render(<LetterModal letter={expectedLetter} onClose={() => {}} title="Draft chase letter" />);
-    expect(screen.getByRole("dialog", { name: "Draft chase letter" })).toBeInTheDocument();
+    render(<LetterModal letter={expectedLetter} onClose={() => {}} title="Prepare follow-up letter" />);
+    expect(screen.getByRole("dialog", { name: "Prepare follow-up letter" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Draft request letter" })).not.toBeInTheDocument();
   });
 

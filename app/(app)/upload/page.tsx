@@ -3,6 +3,8 @@ import { getCase } from "@/components/data/dal";
 import { UploadView } from "@/components/upload/UploadView";
 import { resolveMode } from "@/lib/modes";
 
+export const metadata = { title: "Add documents — Verity" };
+
 /**
  * Server Component wrapper. The dictation entry point on this screen
  * (components/dictation/MicButton) needs the active person's uuid to post

@@ -6,6 +6,8 @@ import { GapCard } from "@/components/gaps/GapCard";
 import { ClockCard } from "@/components/gaps/ClockCard";
 import { GhostCard } from "@/components/ui/GhostCard";
 
+export const metadata = { title: "Gaps — Verity" };
+
 export default async function GapsPage() {
   const caseId = await getActiveCaseId();
   const gaps = gapViews(caseId);
