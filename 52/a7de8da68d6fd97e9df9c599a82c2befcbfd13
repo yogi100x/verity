@@ -1,0 +1,19 @@
+CLAUDE.md
+  s_afabf214a6fe93::t_d34eb6673df733 1-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "52a7de8da68d6fd97e9df9c599a82c2befcbfd13",
+  "prompts": {},
+  "sessions": {
+    "s_afabf214a6fe93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c999a24-05c7-418e-a055-0e42e33d7f6d",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    }
+  }
+}
