@@ -17,7 +17,7 @@ values (
   'audio',
   'audio',
   false,
-  26214400, -- 25MB, matches MAX_AUDIO_BYTES in lib/voice/audio.ts
+  4194304, -- 4MB, matches MAX_AUDIO_BYTES in lib/voice/audio.ts (under Vercel's 4.5MB body ceiling)
   array['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav']
 )
 on conflict (id) do nothing;
