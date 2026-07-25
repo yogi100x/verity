@@ -3,17 +3,19 @@
  * input. A conditional symptom-triggered alert is exactly the "indication of
  * seriousness" output that MHRA classes as a device function.
  *
- * Copy is verbatim from prd.md §8.5. When Lane C lands lib/copy/safety.ts,
- * swap this constant for that import (noted in PR description — lib/copy is
- * Lane C territory).
+ * Copy is sourced from lib/copy/safety.ts (Lane C), verbatim from prd.md
+ * §8.5. The first sentence is split out purely for bold styling — the
+ * rendered text is byte-identical to PERSISTENT_BANNER.
  *
  * Emergency palette is legal here and in the 999 halt card, nowhere else.
  */
 
-const BANNER_COPY = {
-  lead: "This tool organises evidence you already have.",
-  body: "It does not assess symptoms, diagnose, or tell you how urgent something is. If you need to know how urgent something is, use NHS 111 online. If someone's life is at risk, call 999.",
-} as const;
+import { PERSISTENT_BANNER } from "@/lib/copy/safety";
+
+const SENTENCE_BREAK = ". ";
+const breakIndex = PERSISTENT_BANNER.indexOf(SENTENCE_BREAK);
+const BANNER_LEAD = PERSISTENT_BANNER.slice(0, breakIndex + 1);
+const BANNER_BODY = PERSISTENT_BANNER.slice(breakIndex + SENTENCE_BREAK.length);
 
 export function SafetyBanner() {
   return (
@@ -21,8 +23,8 @@ export function SafetyBanner() {
       aria-label="Safety information"
       className="no-print bg-emergency-fill text-emergency border-b border-emergency-border px-6 py-3 text-center text-body-s"
     >
-      <strong className="font-bold">{BANNER_COPY.lead}</strong>{" "}
-      {BANNER_COPY.body}
+      <strong className="font-bold">{BANNER_LEAD}</strong>{" "}
+      {BANNER_BODY}
     </aside>
   );
 }
