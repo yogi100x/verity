@@ -91,17 +91,37 @@ function baseFact(personId: string): Pick<
 /* ============================ conflicts ============================ */
 
 /**
- * One Fact per Conflict, keyed `conflict.<segment>` where `<segment>` is the
- * conflict's own `subject`, normalised. The conflict is derived entirely
- * from verified claims, so the projected fact carries every one of those
- * claim ids as its support and is fully citable — `status: 'disputed'`
- * reflects exactly what a conflict is: multiple sources giving different
- * answers, unresolved. `canonical_value` is `generated_question` passed
- * through unchanged — it is already the product's screened output, not
- * something to re-word here.
+ * One Fact per UNRESOLVED Conflict, keyed `conflict.<segment>` where
+ * `<segment>` is the conflict's own `subject`, normalised. The conflict is
+ * derived entirely from verified claims, so the projected fact carries every
+ * one of those claim ids as its support and is fully citable —
+ * `status: 'disputed'` reflects exactly what a conflict is: multiple sources
+ * giving different answers, unresolved. `canonical_value` is
+ * `generated_question` passed through unchanged — it is already the product's
+ * screened output, not something to re-word here.
+ *
+ * A conflict with `resolution: 'user_resolved'` is SKIPPED. Two independent
+ * resurrection paths exist for a settled disagreement and both must be shut:
+ *
+ *  - Supersession is handled upstream — `detectConflicts` is given the
+ *    superseded claim ids (`lib/ai/reconcile.ts`) and never emits a conflict
+ *    whose claims belong to a closed validity period, so a superseded
+ *    disagreement never reaches this function in the first place.
+ *  - USER RESOLUTION was not handled anywhere. `Conflict.resolution` is a
+ *    frozen contract field with exactly two values, and nothing between the
+ *    person clicking "resolved" and this projection consulted it. The
+ *    projected fact is unconditionally live (`valid_to: null`,
+ *    `superseded_by: null`) and `status: 'disputed'`, so it would fill
+ *    `gp_brief_v1.questions` with a question the person has already answered,
+ *    every time the brief is rebuilt, with no way to make it stop. A pack that
+ *    keeps asking a settled question is the pack a GP stops reading.
+ *
+ * `status: 'disputed'` is only ever emitted for a disagreement that is still
+ * open, which is the only reading of that word this product can defend.
  */
 export function projectConflicts(input: ProjectionInput): Fact[] {
-  const facts = input.conflicts.map((conflict) => {
+  const open = input.conflicts.filter((conflict) => conflict.resolution === 'unresolved');
+  const facts = open.map((conflict) => {
     const fact: Fact = {
       ...baseFact(input.personId),
       ontology_key: `conflict.${normalizeSegment(conflict.subject)}`,

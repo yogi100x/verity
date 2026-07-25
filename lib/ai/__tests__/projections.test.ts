@@ -57,6 +57,60 @@ describe('projectConflicts', () => {
   });
 });
 
+describe('projectConflicts — a settled disagreement is never resurrected', () => {
+  // `Conflict.resolution` is a frozen contract field and nothing consulted it.
+  // A `user_resolved` conflict was still projected as a LIVE, `disputed` fact,
+  // so `gp_brief_v1.questions` would keep asking a question the person had
+  // already answered, on every rebuild, with no way to stop it.
+  //
+  // The fixture's own conflict is the positive control: this must not pass by
+  // projecting nothing at all.
+  it('a user_resolved conflict projects no fact, while the same conflict unresolved projects one', () => {
+    const conflict = fixture.conflicts[0];
+    if (conflict === undefined) throw new Error('fixture has no conflict to resolve');
+
+    const open = projectConflicts({
+      personId: fixture.person.id,
+      conflicts: [{ ...conflict, resolution: 'unresolved' }],
+      gaps: [],
+    });
+    expect(open).toHaveLength(1);
+
+    const settled = projectConflicts({
+      personId: fixture.person.id,
+      conflicts: [{ ...conflict, resolution: 'user_resolved' }],
+      gaps: [],
+    });
+    expect(settled).toHaveLength(0);
+  });
+
+  it('the resolved conflict’s generated_question reaches no projected canonical_value anywhere in projectAll', () => {
+    const conflict = fixture.conflicts[0];
+    if (conflict === undefined) throw new Error('fixture has no conflict to resolve');
+
+    const facts = projectAll({
+      personId: fixture.person.id,
+      conflicts: [{ ...conflict, resolution: 'user_resolved' }],
+      gaps: fixture.gaps,
+    });
+    for (const fact of facts) {
+      expect(fact.canonical_value).not.toBe(conflict.generated_question);
+      expect(fact.conflict_id).toBeNull();
+    }
+  });
+
+  it('never emits a disputed fact for a conflict that is not unresolved', () => {
+    const conflict = fixture.conflicts[0];
+    if (conflict === undefined) throw new Error('fixture has no conflict to resolve');
+    const facts = projectAll({
+      personId: fixture.person.id,
+      conflicts: [{ ...conflict, resolution: 'user_resolved' }],
+      gaps: fixture.gaps,
+    });
+    expect(facts.some((f) => f.status === 'disputed')).toBe(false);
+  });
+});
+
 describe('projectGaps', () => {
   it('projects one fact per gap, canonical_value verbatim, keyed under gap.', () => {
     const facts = projectGaps(makeInput());

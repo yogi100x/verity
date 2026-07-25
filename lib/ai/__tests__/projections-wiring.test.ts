@@ -268,6 +268,74 @@ describe('GET /api/debug/inspect — the fabricated quote never reaches an artef
   });
 });
 
+describe('GET /api/debug/inspect — a slot whose evidence was WITHHELD does not render as "no evidence"', () => {
+  // The silent-evidence-loss path: the level gate and the output filter both
+  // fall through to `slot.gap_prompt`, which reads "No evidence yet — what to
+  // ask for". On the real fixture, `mobility.suggested_level` matches
+  // Margaret's narrative mobility evidence and withholds it — so the page must
+  // say so, by slot, and in the card's own count line.
+  it('the withheld slot carries its own reason and count in the rendered markup', async () => {
+    const artifactsSection = await getArtifactsSection();
+    expect(artifactsSection).toContain('data-suppression-reason="level_not_available_in_domain"');
+    expect(artifactsSection).toContain('Evidence withheld here');
+    // Positive control: a genuinely empty slot still reads as empty, so this
+    // cannot pass by relabelling every gap prompt.
+    expect(artifactsSection).toContain('No evidence yet');
+  });
+
+  it('the count line separates withheld from absent, and the number is non-zero for the CHC pack', async () => {
+    const artifactsSection = await getArtifactsSection();
+    const match = /data-template-key="chc_dst_pack_v1"[^>]*data-suppressed="(\d+)"/.exec(artifactsSection);
+    expect(match).not.toBeNull();
+    expect(Number(match?.[1] ?? '0')).toBeGreaterThan(0);
+    expect(artifactsSection).toContain('because evidence was withheld, not absent');
+  });
+
+  it('the withheld TEXT itself is still not rendered — naming the loss is not leaking it', async () => {
+    const artifactsSection = await getArtifactsSection();
+    const suppressed = /class="artifact-slot-suppression"[^>]*>([^<]*)</.exec(artifactsSection);
+    expect(suppressed).not.toBeNull();
+    // The note reports a count and a cause only. It must not contain a fact
+    // value or a quote from the record.
+    for (const fact of fixture.facts) {
+      expect(suppressed?.[1] ?? '').not.toContain(fact.canonical_value);
+    }
+  });
+});
+
+describe('GET /api/debug/inspect — a user-resolved conflict never reaches the GP brief', () => {
+  // `projectConflicts` skips `resolution: 'user_resolved'`. The fixture's own
+  // conflict is unresolved, so the route legitimately renders its question
+  // (covered above); this proves the exclusion at the projection the route
+  // calls, with the route's own real inputs.
+  it('flipping the fixture conflict to user_resolved removes its question from every built assertion', () => {
+    const facts = reconciledFacts();
+    const gaps = detectGaps(facts, fixture.sources, new Date('2026-07-25T00:00:00.000Z'));
+    const projected = projectAll({
+      personId: fixture.person.id,
+      conflicts: [{ ...conflict, resolution: 'user_resolved' }],
+      gaps,
+    });
+
+    const claimsById = new Map<string, BackingClaim>();
+    for (const claim of fixture.claims) {
+      claimsById.set(claim.id, { verified_substring: claim.verified_substring, quote: claim.quote });
+    }
+
+    const { artifact } = buildArtifact({
+      template: templateByKey('gp_brief_v1'),
+      facts: [...facts, ...projected],
+      claimsById,
+      personId: fixture.person.id,
+      createdAt: '2026-07-25T00:00:00.000Z',
+    });
+
+    for (const assertion of artifact.assertions) {
+      expect(assertion.text).not.toContain(conflict.generated_question);
+    }
+  });
+});
+
 describe('GET /api/debug/inspect — counts still add up for both templates with projections engaged', () => {
   it('filled + verbatim_copy + gap_prompted + omitted === slots_total', async () => {
     const artifactsSection = await getArtifactsSection();

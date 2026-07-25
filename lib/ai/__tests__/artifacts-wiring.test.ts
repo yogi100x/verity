@@ -342,6 +342,8 @@ describe('renderInspectPage — artefacts escaping', () => {
               ],
               state: 'filled',
               verbatim_attribution: null,
+              verbatim_source: null,
+              suppression: null,
             },
             {
               slot_key: 'breathing.suggested_level',
@@ -356,6 +358,17 @@ describe('renderInspectPage — artefacts escaping', () => {
               citations: [],
               state: 'gap_prompt',
               verbatim_attribution: null,
+              verbatim_source: null,
+              // The suppression note is the only thing that distinguishes a
+              // withheld slot from an empty one, and every field it
+              // interpolates — including `filterOutput`'s own reported term —
+              // must be escaped like everything else on this page.
+              suppression: {
+                reason: '<script>alert(18)</script>',
+                withheld_fact_count: 2,
+                filter_reason: '<script>alert(19)</script>',
+                filter_term: '<script>alert(20)</script>',
+              },
             },
             {
               slot_key: 'breathing.verbatim',
@@ -370,11 +383,13 @@ describe('renderInspectPage — artefacts escaping', () => {
               citations: [],
               state: 'verbatim_copy',
               verbatim_attribution: '<script>alert(17)</script> ref',
+              verbatim_source: 'framework_citation',
+              suppression: null,
             },
           ],
         },
       ],
-      counts: { slots_total: 4, filled: 1, verbatim_copy: 1, gap_prompted: 1, omitted: 1 },
+      counts: { slots_total: 4, filled: 1, verbatim_copy: 1, gap_prompted: 1, omitted: 1, suppressed: 1 },
       omissions: [
         {
           slot_key: 'breathing.hostile',
@@ -410,7 +425,7 @@ describe('renderInspectPage — artefacts escaping', () => {
     // Every hostile payload above — including the ones only the new
     // renderer-aware, verbatim-copy and omission code paths can reach — must
     // be escaped, so no alert() number may survive unescaped.
-    for (let n = 1; n <= 17; n += 1) {
+    for (let n = 1; n <= 20; n += 1) {
       expect(artifactsSection).not.toContain(`<script>alert(${n})`);
     }
     // The escaped form must still be present, proving the value was rendered

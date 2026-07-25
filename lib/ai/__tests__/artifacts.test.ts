@@ -575,4 +575,38 @@ describe('buildArtifact — both templates over the same fact set', () => {
     const b2 = buildFor('gp_brief_v1');
     expect(normalise(b1)).toEqual(normalise(b2));
   });
+
+  it('the WHOLE result is deterministic — omissions, structuralAssertions and suppressions too, and created_at is the caller’s string unchanged', () => {
+    // `created_at` is deliberately NOT normalised away here: `buildArtifact`
+    // takes `createdAt` precisely so it never reads the wall clock, so two
+    // builds must agree on it exactly. Normalising it out would let a
+    // reintroduced `new Date()` pass unnoticed.
+    function whole(templateKey: 'chc_dst_pack_v1' | 'gp_brief_v1') {
+      const result = buildArtifact({
+        ...buildInput(templateKey),
+        person: { display_name: fixture.person.display_name },
+        assembledOn: '2026-07-25',
+        sources: fixture.sources,
+      });
+      return {
+        created_at: result.artifact.created_at,
+        person_id: result.artifact.person_id,
+        template_key: result.artifact.template_key,
+        assertions: result.artifact.assertions.map((a) => ({
+          slot_key: a.slot_key,
+          text: a.text,
+          fact_ids: [...a.fact_ids],
+          citation_verified: a.citation_verified,
+        })),
+        omissions: result.omissions,
+        structuralAssertions: result.structuralAssertions,
+        suppressions: result.suppressions,
+      };
+    }
+
+    for (const key of ['chc_dst_pack_v1', 'gp_brief_v1'] as const) {
+      expect(whole(key)).toEqual(whole(key));
+      expect(whole(key).created_at).toBe(CREATED_AT);
+    }
+  });
 });

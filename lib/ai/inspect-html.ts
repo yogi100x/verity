@@ -218,6 +218,26 @@ export interface InspectArtifactView {
        *  from `FRAMEWORK_CITATIONS`; `null` for Lane C copy (no `ref` to
        *  show) and for every other state. */
       readonly verbatim_attribution: string | null;
+      /** WHICH kind of non-fact source filled a `verbatim_copy` slot; `null`
+       *  for every other state. The three are not interchangeable to a reader:
+       *  Lane C's disclaimer is fixed wording, a framework citation is quoted
+       *  guidance, and a source inventory is this pack's own attachment list.
+       *  Labelling all three "fixed wording" was wrong for the third — a
+       *  document list is neither fixed nor invented. Mirrors
+       *  `StructuralAssertion.source` (`lib/ai/artifacts.ts`). */
+      readonly verbatim_source: 'lane_c_copy' | 'framework_citation' | 'source_inventory' | null;
+      /** Set when this slot MATCHED verified-backed evidence and had it
+       *  withheld — by the output filter, or by the level gate — so the body
+       *  a reader sees is the slot's "No evidence yet" prompt. Without this the
+       *  two are indistinguishable on the page and evidence goes missing in
+       *  silence. Mirrors `SlotSuppression` (`lib/ai/artifacts.ts`); `null`
+       *  whenever nothing was withheld. */
+      readonly suppression: {
+        readonly reason: string;
+        readonly withheld_fact_count: number;
+        readonly filter_reason: string | null;
+        readonly filter_term: string | null;
+      } | null;
     }>;
   }>;
   readonly counts: {
@@ -226,6 +246,11 @@ export interface InspectArtifactView {
     readonly verbatim_copy: number;
     readonly gap_prompted: number;
     readonly omitted: number;
+    /** How many of `gap_prompted` above are showing that prompt because
+     *  evidence was WITHHELD rather than because none exists. Counted
+     *  separately and rendered in the count line: a non-zero value here means
+     *  the pack is quieter than the record. */
+    readonly suppressed: number;
   };
   /** Every slot the template defines that produced no assertion, NAMED. A bare
    *  "3 omitted" count let the CHC pack's cover page and method section vanish
@@ -489,15 +514,49 @@ function renderLevelWarning(slot: ArtifactSlotView): string {
  * banner contains "urgent" and "999" by design) — but it is still escaped
  * here, like every other interpolated value on this page.
  */
+const VERBATIM_LABEL: Readonly<Record<'lane_c_copy' | 'framework_citation' | 'source_inventory', string>> = {
+  lane_c_copy: 'Fixed wording — not evidence from the record',
+  framework_citation: 'Verbatim national-framework citation — not evidence from the record',
+  source_inventory: "The documents this pack draws on — titles only, not evidence about the person",
+};
+
 function renderVerbatimBody(slot: ArtifactSlotView): string {
   const attribution =
     slot.verbatim_attribution === null
       ? ''
       : `<p class="artifact-slot-verbatim-attribution">Source: ${escapeHtml(slot.verbatim_attribution)}</p>`;
+  // A source inventory is not "fixed wording" and a framework citation is not
+  // Lane C's copy; labelling all three identically told the reader something
+  // false about two of them. Unknown/absent falls back to the most cautious
+  // of the three labels rather than to no label at all.
+  const label =
+    slot.verbatim_source === null ? VERBATIM_LABEL.lane_c_copy : VERBATIM_LABEL[slot.verbatim_source];
   return `
-        <p class="artifact-slot-verbatim-label">Fixed wording — not evidence from the record</p>
+        <p class="artifact-slot-verbatim-label" data-verbatim-source="${escapeHtml(slot.verbatim_source ?? 'unknown')}">${escapeHtml(label)}</p>
         <p class="artifact-slot-text">${escapeHtml(slot.text)}</p>
         ${attribution}`;
+}
+
+/**
+ * The line that stops a withheld slot reading as an empty one.
+ *
+ * A gap prompt says "No evidence yet — what to ask for". When the slot in fact
+ * matched quoted, verified evidence that was then withheld (output filter, or
+ * the CHC level gate), that prompt is actively misleading: it tells a reader
+ * the record is silent when it is not. The withheld TEXT is deliberately not
+ * shown — withholding it is the point — but its existence, count, and cause
+ * are, so the loss is auditable instead of invisible.
+ */
+function renderSuppressionNote(slot: ArtifactSlotView): string {
+  const { suppression } = slot;
+  if (suppression === null) return '';
+  const cause =
+    suppression.filter_term === null
+      ? ''
+      : ` (output filter: ${suppression.filter_reason ?? 'unknown'}, matched "${suppression.filter_term}")`;
+  const detail = `${suppression.withheld_fact_count} matching record item(s) were withheld here, so this prompt is not the same as "the record says nothing"${cause}.`;
+  return `
+        <p class="artifact-slot-suppression" data-suppression-reason="${escapeHtml(suppression.reason)}" data-suppression-count="${escapeHtml(String(suppression.withheld_fact_count))}">${escapeHtml(detail)}</p>`;
 }
 
 const STATE_CLASS: Readonly<Record<ArtifactSlotView['state'], string>> = {
@@ -523,8 +582,8 @@ function renderArtifactSlot(slot: ArtifactSlotView): string {
       : slot.state === 'verbatim_copy'
         ? renderVerbatimBody(slot)
         : `
-        <p class="artifact-slot-gap-label">No evidence yet — what to ask for</p>
-        <p class="artifact-slot-text artifact-slot-gap-text">${escapeHtml(slot.gap_prompt ?? '')}</p>`;
+        <p class="artifact-slot-gap-label">${slot.suppression === null ? 'No evidence yet — what to ask for' : 'Evidence withheld here — what to ask for'}</p>
+        <p class="artifact-slot-text artifact-slot-gap-text">${escapeHtml(slot.gap_prompt ?? '')}</p>${renderSuppressionNote(slot)}`;
 
   return `
     <div class="artifact-slot ${stateClass}" data-slot-key="${escapeHtml(slot.slot_key)}" data-renderer="${escapeHtml(slot.renderer)}" data-state="${escapeHtml(slot.state)}" data-citations="${escapeHtml(String(slot.citations.length))}">
@@ -588,9 +647,10 @@ function renderArtifactCard(artifact: InspectArtifactView): string {
   const countLine =
     `${counts.slots_total} slots · ${counts.filled} filled from evidence · ` +
     `${counts.verbatim_copy} fixed wording (not evidence) · ` +
-    `${counts.gap_prompted} asking for a document · ${counts.omitted} left out (each one named below)`;
+    `${counts.gap_prompted} asking for a document (${counts.suppressed} of them because evidence was withheld, not absent) · ` +
+    `${counts.omitted} left out (each one named below)`;
   return `
-    <div class="artifact-card" data-template-key="${escapeHtml(artifact.template_key)}" data-slots-total="${escapeHtml(String(counts.slots_total))}" data-filled="${escapeHtml(String(counts.filled))}" data-verbatim-copy="${escapeHtml(String(counts.verbatim_copy))}" data-gap-prompted="${escapeHtml(String(counts.gap_prompted))}" data-omitted="${escapeHtml(String(counts.omitted))}">
+    <div class="artifact-card" data-template-key="${escapeHtml(artifact.template_key)}" data-slots-total="${escapeHtml(String(counts.slots_total))}" data-filled="${escapeHtml(String(counts.filled))}" data-verbatim-copy="${escapeHtml(String(counts.verbatim_copy))}" data-gap-prompted="${escapeHtml(String(counts.gap_prompted))}" data-omitted="${escapeHtml(String(counts.omitted))}" data-suppressed="${escapeHtml(String(counts.suppressed))}">
       <h3 class="artifact-title">${escapeHtml(artifact.title)}</h3>
       <p class="artifact-audience">For: ${escapeHtml(artifact.audience)}</p>
       <p class="artifact-count-line">${escapeHtml(countLine)}</p>
@@ -1342,6 +1402,11 @@ const STYLE = `
     letter-spacing: 0.02em;
     color: var(--ink-muted);
     margin: 0 0 0.4rem;
+  }
+  .artifact-slot-suppression {
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+    margin: 0.4rem 0 0;
   }
   .artifact-slot-verbatim-attribution {
     font-size: 0.8rem;

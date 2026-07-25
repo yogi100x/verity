@@ -22,7 +22,10 @@ import {
   BannedArtefactTitleError,
   UnknownTemplateError,
   InvalidOntologyPatternError,
+  UngatedLevelSlotError,
+  assertLevelSlotsAreGated,
 } from '@/lib/ai/templates';
+import type { ArtifactTemplate } from '@/lib/contracts';
 import {
   CHC_DOMAIN_NAMES,
   CHC_DOMAIN_LEVELS,
@@ -274,6 +277,47 @@ describe('levelSlotDomain — the .suggested_level key convention', () => {
 
   it('is null for a slot with no .suggested_level suffix', () => {
     expect(levelSlotDomain({ key: 'mobility.evidence' })).toBeNull();
+  });
+
+  it('a template whose level slot the gate cannot cover fails LOUDLY at load, not silently', () => {
+    // `levelSlotDomain` returning null does not merely skip a check — it turns
+    // the level gate OFF for that slot, letting narrative prose back into a
+    // controlled form field with no error anywhere. Both realistic data bugs
+    // (an extra key segment, a domain typo) must throw.
+    const template = (slotKey: string): ArtifactTemplate => ({
+      key: 'chc_dst_pack_v1',
+      title: 'A pack',
+      audience: 'someone',
+      sections: [
+        {
+          key: 'continence',
+          title: 'Continence',
+          slots: [
+            {
+              key: slotKey,
+              label: 'Suggested level',
+              ontology_match: ['chc.continence'],
+              citation_required: true,
+              renderer: 'prose',
+              gap_prompt: 'Not enough evidence to suggest a level.',
+            },
+          ],
+        },
+      ],
+    });
+
+    for (const bad of ['chc.continence.suggested_level', 'continance.suggested_level', '.suggested_level']) {
+      expect(() => assertLevelSlotsAreGated(template(bad)), bad).toThrow(UngatedLevelSlotError);
+    }
+    // Positive control: the correct convention must NOT throw, so the test
+    // above cannot pass by rejecting everything.
+    expect(() => assertLevelSlotsAreGated(template('continence.suggested_level'))).not.toThrow();
+  });
+
+  it('every real *.suggested_level slot in both frozen templates is gated', () => {
+    for (const loaded of loadTemplates()) {
+      expect(() => assertLevelSlotsAreGated(loaded), loaded.key).not.toThrow();
+    }
   });
 
   it('is null when the prefix is not a real ChcDomain, even with the right suffix', () => {

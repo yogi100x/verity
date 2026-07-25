@@ -50,11 +50,54 @@ function assertTitleNotBanned(template: ArtifactTemplate): void {
   }
 }
 
+/**
+ * A slot whose key's final segment is `suggested_level` — so it holds a
+ * controlled CHC level, by the convention `levelSlotDomain` reads — but whose
+ * prefix is not a `ChcDomain`, so `levelSlotDomain` returns `null` and the
+ * level gate in `resolveSlot` is SILENTLY OFF for it.
+ *
+ * This is the failure mode the TODO on `levelSlotDomain` names, made loud. The
+ * gate is inferred from a key convention because `Slot` has no field to declare
+ * a controlled vocabulary; the cost of inferring is that a template author who
+ * writes `chc.continence.suggested_level` (three segments) or
+ * `continance.suggested_level` (typo) gets narrative prose back in a form field
+ * with no error anywhere — the exact defect this PR fixed, reintroduced by a
+ * data edit. Thrown at load, alongside the zod parse and the title check, so
+ * the template data cannot disable its own gate in silence.
+ */
+export class UngatedLevelSlotError extends Error {
+  constructor(templateKey: string, slotKey: string) {
+    super(
+      `template "${templateKey}" slot "${slotKey}" ends in "${LEVEL_SLOT_KEY_SUFFIX}" but its ` +
+        'prefix is not a ChcDomain, so the level gate in resolveSlot would be silently disabled ' +
+        'for it. Rename the slot to "<chc_domain>.suggested_level".',
+    );
+    this.name = 'UngatedLevelSlotError';
+  }
+}
+
+/** Exported so the guard can be exercised against a hand-built template: the
+ *  one frozen fixture is (and must stay) clean, so `loadTemplates` alone can
+ *  never demonstrate the throw. */
+export function assertLevelSlotsAreGated(template: ArtifactTemplate): void {
+  for (const section of template.sections) {
+    for (const slot of section.slots) {
+      if (!slot.key.endsWith(LEVEL_SLOT_KEY_SUFFIX)) continue;
+      if (levelSlotDomain(slot) === null) {
+        throw new UngatedLevelSlotError(template.key, slot.key);
+      }
+    }
+  }
+}
+
 /** All phase-1 templates, parsed and validated from fixtures/templates.json. */
 export function loadTemplates(): ArtifactTemplate[] {
   if (cachedTemplates === null) {
     const parsed = Templates.parse(templatesJson);
-    for (const template of parsed) assertTitleNotBanned(template);
+    for (const template of parsed) {
+      assertTitleNotBanned(template);
+      assertLevelSlotsAreGated(template);
+    }
     cachedTemplates = parsed;
   }
   return cachedTemplates;

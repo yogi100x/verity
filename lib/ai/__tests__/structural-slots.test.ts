@@ -404,6 +404,210 @@ describe('level slots — never narrative prose, only a level valid for that exa
   });
 });
 
+/* ====== the structural path must be INCAPABLE of asserting anything about the person ====== */
+
+describe('method.provenance — assembledOn cannot smuggle a claim about the person into Lane C copy', () => {
+  // THE HOLE: the structural-copy path bypasses `filterOutput` by design (the
+  // banner it also carries contains "urgent" and "999" on purpose), and
+  // `assembledOn` was an unscreened caller string interpolated straight into
+  // `footer()`. So the one path built on "its words can only ever be fixed
+  // copy" would render an arbitrary sentence about Margaret, unquoted, wearing
+  // that copy as cover.
+  const HOSTILE = 'and Margaret has severe heart failure requiring urgent review';
+
+  it('a non-date assembledOn is REFUSED — the slot stays omitted rather than rendering the string', () => {
+    const { artifact, omissions } = buildArtifact(
+      baseInput({ person: PERSON, assembledOn: HOSTILE }),
+    );
+    const assertion = artifact.assertions.find((a) => a.slot_key === 'method.provenance');
+    expect(assertion).toBeUndefined();
+
+    const named = omissions.find((o) => o.slot_key === 'method.provenance');
+    expect(named?.reason).toBe('awaiting_fixed_copy');
+
+    // And the hostile text reaches no assertion at all, by any route.
+    for (const a of artifact.assertions) {
+      expect(a.text).not.toContain('heart failure');
+      expect(a.text).not.toContain(HOSTILE);
+    }
+  });
+
+  it.each(['25 July 2026', '2026-7-25', '', '2026-07-25 (approx)', '2026-07-25\nand she is dying'])(
+    'refuses assembledOn %j',
+    (bad) => {
+      const { artifact } = buildArtifact(baseInput({ person: PERSON, assembledOn: bad }));
+      expect(artifact.assertions.some((a) => a.slot_key === 'method.provenance')).toBe(false);
+    },
+  );
+
+  it('positive control: a real YYYY-MM-DD still fills, verbatim from footer()', () => {
+    const { artifact } = buildArtifact(baseInput({ person: PERSON, assembledOn: ASSEMBLED_ON }));
+    const assertion = artifact.assertions.find((a) => a.slot_key === 'method.provenance');
+    expect(assertion?.text).toBe(footer(PERSON.display_name, ASSEMBLED_ON));
+  });
+});
+
+describe('level slots — the emitted text is a form value, not the raw record string', () => {
+  // THE DEFECT: the gate validated `value.trim().toLowerCase()` and then
+  // emitted the value RAW with the subject prepended, so a record saying
+  // "  HIGH  " put `continence:   HIGH  ` into the pack's Continence
+  // "Suggested level" field. An assessor reads this against the real DST form.
+  function levelFact(ontologyKey: string, value: string, claimId: string): Fact {
+    return {
+      id: randomUUID(),
+      person_id: fixture.person.id,
+      ontology_key: ontologyKey,
+      subject: 'continence',
+      canonical_value: value,
+      provenance: 'document_extracted',
+      status: 'confirmed',
+      valid_from: null,
+      valid_to: null,
+      supporting_claim_ids: [claimId],
+      conflict_id: null,
+      superseded_by: null,
+    };
+  }
+
+  it.each([' HIGH ', 'High', 'high', '\thigh\n'])(
+    'a record value of %j emits exactly the canonical ChcLevel token "high"',
+    (raw) => {
+      const claimId = randomUUID();
+      const claims = new Map<string, BackingClaim>([
+        [claimId, { verified_substring: true, quote: 'Continence needs recorded as High.' }],
+      ]);
+      const { artifact } = buildArtifact(
+        baseInput({ facts: [levelFact('chc.continence', raw, claimId)], claimsById: claims }),
+      );
+      const assertion = artifact.assertions.find((a) => a.slot_key === 'continence.suggested_level');
+      expect(assertion?.text).toBe('high');
+      expect(assertion?.citation_verified).toBe(true);
+    },
+  );
+
+  it('every filled level slot, across every domain, emits only tokens CHC_DOMAIN_LEVELS offers for that domain', () => {
+    for (const domain of ChcDomain.options) {
+      for (const level of CHC_DOMAIN_LEVELS[domain]) {
+        const claimId = randomUUID();
+        const claims = new Map<string, BackingClaim>([
+          [claimId, { verified_substring: true, quote: `Recorded as ${level}.` }],
+        ]);
+        const { artifact } = buildArtifact(
+          baseInput({
+            facts: [levelFact(`chc.${domain}`, level.toUpperCase(), claimId)],
+            claimsById: claims,
+          }),
+        );
+        const assertion = artifact.assertions.find((a) => a.slot_key === `${domain}.suggested_level`);
+        if (assertion === undefined || !assertion.citation_verified) continue;
+        for (const line of assertion.text.split('\n')) {
+          expect(ChcLevel.safeParse(line).success, `${domain}: "${line}"`).toBe(true);
+          expect(CHC_DOMAIN_LEVELS[domain], `${domain}: "${line}"`).toContain(line);
+        }
+      }
+    }
+  });
+
+  it('an ordinary evidence slot is UNCHANGED — it still emits subject + verbatim value', () => {
+    const claimId = randomUUID();
+    const claims = new Map<string, BackingClaim>([
+      [claimId, { verified_substring: true, quote: 'Continence needs recorded as High.' }],
+    ]);
+    const { artifact } = buildArtifact(
+      baseInput({ facts: [levelFact('chc.continence', ' HIGH ', claimId)], claimsById: claims }),
+    );
+    const assertion = artifact.assertions.find((a) => a.slot_key === 'continence.evidence');
+    expect(assertion?.text).toBe('continence:  HIGH ');
+  });
+});
+
+/* ============ withheld evidence must never read as absent evidence ============ */
+
+describe('suppressions — a slot whose evidence was WITHHELD is distinguishable from one that has none', () => {
+  // THE DEFECT: both the output filter and the level gate fall through to
+  // `slot.gap_prompt`, whose rendered label reads "No evidence yet". So a slot
+  // holding back a real, quoted record item looked byte-identical to a slot
+  // with nothing behind it — silent evidence loss, invisible in the counts too.
+  const template = templateByKey('chc_dst_pack_v1');
+  const slotByKey = (key: string) => {
+    const slot = slotsOf(template)
+      .map((s) => s.slot)
+      .find((s) => s.key === key);
+    if (slot === undefined) throw new Error(`${key} slot not found`);
+    return slot;
+  };
+
+  it('the level gate records a suppression naming how many facts it withheld', () => {
+    const slot = slotByKey('mobility.suggested_level');
+    const resolution = resolveSlot(slot, fixture.facts, claimsById());
+
+    // Precondition: this IS the gap-prompt fall-through path.
+    expect(resolution.fact_ids).toEqual([]);
+    expect(resolution.gap_prompt).toBe(slot.gap_prompt);
+
+    expect(resolution.suppression).not.toBeNull();
+    expect(resolution.suppression?.reason).toBe('level_not_available_in_domain');
+    expect(resolution.suppression?.slot_key).toBe(slot.key);
+    expect(resolution.suppression?.withheld_fact_count).toBeGreaterThan(0);
+  });
+
+  it('the output filter records a suppression carrying the filter’s own reason and term', () => {
+    const claimId = randomUUID();
+    // A verified quote that does NOT contain the condition name the composed
+    // text would assert — so `filterOutput` rejects it as an uncited condition.
+    const claims = new Map<string, BackingClaim>([
+      [claimId, { verified_substring: true, quote: 'Patient reports feeling generally well today.' }],
+    ]);
+    const fact: Fact = {
+      id: randomUUID(),
+      person_id: fixture.person.id,
+      ontology_key: 'chc.other_significant',
+      subject: 'other_significant',
+      canonical_value: 'pneumonia',
+      provenance: 'document_extracted',
+      status: 'confirmed',
+      valid_from: null,
+      valid_to: null,
+      supporting_claim_ids: [claimId],
+      conflict_id: null,
+      superseded_by: null,
+    };
+
+    const slot = slotByKey('other_significant.evidence');
+    const resolution = resolveSlot(slot, [fact], claims);
+
+    expect(resolution.fact_ids).toEqual([]);
+    expect(resolution.gap_prompt).toBe(slot.gap_prompt);
+    expect(resolution.suppression?.reason).toBe('output_filtered');
+    expect(resolution.suppression?.withheld_fact_count).toBe(1);
+    expect(resolution.suppression?.filter_reason).toBe('uncited_condition');
+    expect(resolution.suppression?.filter_term).toBe('pneumonia');
+  });
+
+  it('a slot with genuinely NO matching evidence records no suppression — the two are not conflated', () => {
+    const slot = slotByKey('continence.evidence');
+    const resolution = resolveSlot(slot, [], new Map());
+    expect(resolution.gap_prompt).toBe(slot.gap_prompt);
+    expect(resolution.suppression).toBeNull();
+  });
+
+  it('a slot that FILLS records no suppression', () => {
+    const slot = slotByKey('mobility.evidence');
+    const resolution = resolveSlot(slot, fixture.facts, claimsById());
+    expect(resolution.fact_ids.length).toBeGreaterThan(0);
+    expect(resolution.suppression).toBeNull();
+  });
+
+  it('buildArtifact carries every suppression out with the artefact, and names no slot twice', () => {
+    const { suppressions } = buildArtifact(baseInput({ person: PERSON, assembledOn: ASSEMBLED_ON }));
+    expect(suppressions.length).toBeGreaterThan(0);
+    expect(new Set(suppressions.map((s) => s.slot_key)).size).toBe(suppressions.length);
+    for (const suppression of suppressions) {
+      expect(suppression.withheld_fact_count).toBeGreaterThan(0);
+    }
+  });
+});
+
 /* ===================== whole-artefact invariants, re-checked with the new paths engaged ===================== */
 
 describe('whole-artefact invariants still hold with structural fills and level-slot fall-through engaged', () => {

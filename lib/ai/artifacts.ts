@@ -63,6 +63,47 @@ import { FRAMEWORK_CITATIONS, type CitationId } from '@/lib/detectors/well_manag
  */
 export type SlotOmissionReason = 'awaiting_fixed_copy' | 'no_evidence';
 
+/**
+ * WHY a slot that DID match real, verified-backed evidence was nevertheless
+ * not filled with it.
+ *
+ * THE DEFECT THIS FIXES: both withholding paths below fell through to
+ * `slot.gap_prompt`, and a gap prompt reads "No evidence yet — what to ask
+ * for". So a slot that matched a genuine, quoted record item and then had it
+ * withheld was byte-indistinguishable from a slot with nothing behind it. A
+ * reader — and the reviewer checking the pack — would conclude the record is
+ * silent on a domain when in fact the pipeline is holding evidence back. That
+ * is silent evidence loss, which is worse than either honest outcome, and it
+ * is invisible in the counts too (it lands in `gap_prompted`).
+ *
+ * Naming it does not change the WITHHOLDING — over-blocking is `filterOutput`'s
+ * deliberate design and the level gate is a correctness rule — it changes
+ * whether the withholding is legible.
+ *
+ *  - `output_filtered` — the composed evidence text tripped
+ *    `lib/safety/output_filter.ts`. Carries the filter's own reason and matched
+ *    term so the cause is diagnosable rather than mysterious.
+ *  - `level_not_available_in_domain` — a `<domain>.suggested_level` slot matched
+ *    facts whose values are not a `ChcLevel` this domain offers (narrative
+ *    prose, or "severe" under continence). The evidence itself is not lost —
+ *    it still fills that domain's `.evidence` slot — but this slot's fall-back
+ *    must not read as "the record says nothing".
+ */
+export type SlotSuppressionReason = 'output_filtered' | 'level_not_available_in_domain';
+
+export interface SlotSuppression {
+  readonly slot_key: string;
+  readonly reason: SlotSuppressionReason;
+  /** How many matching, verified-backed facts were withheld. Never zero. */
+  readonly withheld_fact_count: number;
+  /** `filterOutput`'s own category, for `output_filtered`; null otherwise. */
+  readonly filter_reason: string | null;
+  /** The term `filterOutput` matched, for `output_filtered`; null otherwise.
+   *  A banned term or a condition name — never a fact value, so naming it
+   *  cannot leak the withheld assertion back out. */
+  readonly filter_term: string | null;
+}
+
 export interface SlotResolution {
   readonly slot_key: string;
   readonly fact_ids: readonly string[];
@@ -72,6 +113,10 @@ export interface SlotResolution {
   readonly omitted: boolean;
   /** Non-null exactly when `omitted` is true. Never omit without a reason. */
   readonly omission_reason: SlotOmissionReason | null;
+  /** Non-null exactly when matching evidence existed and was WITHHELD — see
+   *  `SlotSuppression`. Null both when the slot filled and when nothing
+   *  matched at all: those two are already distinguishable. */
+  readonly suppression: SlotSuppression | null;
 }
 
 /** One omitted slot, named and attributed to its section, so a reviewer can
@@ -133,6 +178,47 @@ function composeText(facts: readonly Fact[]): string {
 }
 
 /**
+ * A `<domain>.suggested_level` slot's text: the CANONICAL `ChcLevel` token from
+ * the frozen contract's own vocabulary, alone, one per line.
+ *
+ * THE DEFECT THIS FIXES: the level gate validated the value NORMALISED
+ * (`value.trim().toLowerCase()`) and then `composeText` emitted it RAW, with
+ * the subject prepended. A record saying `"  HIGH  "` passed the gate and the
+ * pack's Continence "Suggested level" field rendered `continence:   HIGH  ` —
+ * a controlled-vocabulary form field carrying a subject prefix, the wrong case
+ * and stray whitespace. An assessor reads this pack against the real DST form;
+ * a field that does not contain a form value is the first thing they distrust.
+ *
+ * This is normalisation, not re-wording: the gate only lets a value through
+ * when it IS this exact token modulo case and surrounding space, and the token
+ * comes from `ChcLevel` / `CHC_DOMAIN_LEVELS`, never from this module. The
+ * record's own words are not lost — the same fact still fills that domain's
+ * `.evidence` slot verbatim, and the raw value is what the level-mismatch
+ * warning reads.
+ */
+function composeLevelText(domain: ChcDomain, facts: readonly Fact[]): string {
+  return facts
+    .map((fact) => {
+      const level = validChcLevelValue(domain, fact.canonical_value);
+      // Unreachable via `resolveSlot` (a slot only fills when EVERY matched
+      // fact carries a valid level), but never fall back to raw text here: a
+      // silent raw emission is the defect this function exists to remove.
+      if (level === null) throw new Error(`level slot fact "${fact.id}" carries no valid level for ${domain}`);
+      return level;
+    })
+    .join('\n');
+}
+
+/** The text a slot's resolved facts compose to — the ONE place this decision is
+ *  made, so the string `filterOutput` screens in `resolveSlot` is byte-identical
+ *  to the one `buildArtifact` stores. They diverged once: the filter saw
+ *  `composeText`, the assertion stored something else. */
+function composeSlotText(slot: Pick<Slot, 'key'>, facts: readonly Fact[]): string {
+  const levelDomain = levelSlotDomain(slot);
+  return levelDomain === null ? composeText(facts) : composeLevelText(levelDomain, facts);
+}
+
+/**
  * The verbatim quotes standing behind these facts.
  *
  * `filterOutput` rejects a generated string that names a clinical condition
@@ -174,9 +260,10 @@ function citedSpansFor(
  * `levelsNotAvailableInDomain`'s own normalisation, so the two never disagree
  * about the same value.
  */
-function isValidChcLevelValue(domain: ChcDomain, value: string): boolean {
+function validChcLevelValue(domain: ChcDomain, value: string): ChcLevel | null {
   const parsed = ChcLevel.safeParse(value.trim().toLowerCase());
-  return parsed.success && isValidLevel(domain, parsed.data);
+  if (!parsed.success || !isValidLevel(domain, parsed.data)) return null;
+  return parsed.data;
 }
 
 export function resolveSlot(
@@ -192,19 +279,47 @@ export function resolveSlot(
   // record). A domain slot with narrative evidence ("unsteady on stairs") or
   // a level the domain does not offer ("severe" under continence) is treated
   // exactly as if nothing had matched, and falls through below.
+  //
+  // `every`, not `some`: a level slot is a single controlled-vocabulary form
+  // field, so a slot matching several facts where only some carry a valid
+  // level falls through WHOLE. Emitting the valid subset would silently drop
+  // the rest of the record's words from a field an assessor reads as complete.
   const levelDomain = levelSlotDomain(slot);
   const levelOk =
-    levelDomain === null || matched.every((fact) => isValidChcLevelValue(levelDomain, fact.canonical_value));
+    levelDomain === null ||
+    matched.every((fact) => validChcLevelValue(levelDomain, fact.canonical_value) !== null);
 
   // Composed evidence text is GENERATED output (this module joins subject +
   // value), never verbatim copy or a source quote, so it must clear the same
   // filter every other generated string in this product clears. A slot whose
   // composed text trips the filter is treated exactly as if nothing had
   // matched — over-blocking is the documented, deliberate design of
-  // `filterOutput` itself.
-  const filterOk =
-    matched.length === 0 ||
-    filterOutput(composeText(matched), citedSpansFor(matched, claimsById)).ok;
+  // `filterOutput` itself — but it is RECORDED as a suppression, not left to
+  // masquerade as "no evidence". See `SlotSuppression`.
+  let suppression: SlotSuppression | null = null;
+  let filterOk = true;
+
+  if (matched.length > 0 && !levelOk) {
+    suppression = {
+      slot_key: slot.key,
+      reason: 'level_not_available_in_domain',
+      withheld_fact_count: matched.length,
+      filter_reason: null,
+      filter_term: null,
+    };
+  } else if (matched.length > 0) {
+    const verdict = filterOutput(composeSlotText(slot, matched), citedSpansFor(matched, claimsById));
+    filterOk = verdict.ok;
+    if (!verdict.ok) {
+      suppression = {
+        slot_key: slot.key,
+        reason: 'output_filtered',
+        withheld_fact_count: matched.length,
+        filter_reason: verdict.reason,
+        filter_term: verdict.term,
+      };
+    }
+  }
 
   if (matched.length > 0 && levelOk && filterOk) {
     return {
@@ -213,6 +328,7 @@ export function resolveSlot(
       gap_prompt: null,
       omitted: false,
       omission_reason: null,
+      suppression: null,
     };
   }
 
@@ -223,6 +339,7 @@ export function resolveSlot(
       gap_prompt: slot.gap_prompt,
       omitted: false,
       omission_reason: null,
+      suppression,
     };
   }
 
@@ -235,6 +352,7 @@ export function resolveSlot(
     gap_prompt: null,
     omitted: true,
     omission_reason: slot.citation_required ? 'no_evidence' : 'awaiting_fixed_copy',
+    suppression,
   };
 }
 
@@ -265,11 +383,15 @@ export interface BuildArtifactInput {
    *  behaviour exactly — those slots stay omitted, named, as
    *  `awaiting_fixed_copy`. Never invented when absent. */
   readonly person?: { readonly display_name: string };
-  /** The assembly date for `method.provenance` (`footer()`'s `[date]` slot).
+  /** The assembly date for `method.provenance` (`footer()`'s `[date]` slot),
+   *  as a strict `YYYY-MM-DD` calendar date — see `ISO_CALENDAR_DATE`. A value
+   *  in any other shape is REFUSED, not rendered: this string is interpolated
+   *  into Lane C copy on the one path that bypasses `filterOutput`, so it must
+   *  be structurally incapable of carrying a sentence about the person.
    *  Deliberately a caller-supplied STRING, never `new Date()` here — this
    *  file is pure and synchronous, and a wall-clock read would make its
-   *  output non-deterministic and untestable. Absent by default: the slot
-   *  stays omitted, named, rather than dated with an invented value. */
+   *  output non-deterministic and untestable. Absent or malformed: the slot
+   *  stays omitted, named, rather than dated with an unscreened value. */
   readonly assembledOn?: string;
   /**
    * The sources this pack draws on — required to fill a `source.inventory`
@@ -316,6 +438,12 @@ export interface BuildArtifactResult {
   /** Every assertion filled from verbatim copy rather than a fact — see
    *  `StructuralAssertion`. A subset of `artifact.assertions` by `slot_key`. */
   readonly structuralAssertions: readonly StructuralAssertion[];
+  /** Every slot that MATCHED verified-backed evidence and had it withheld —
+   *  see `SlotSuppression`. Travels with the artefact for the same reason
+   *  `omissions` does: a caller must not be able to render the pack while
+   *  silently unaware that a domain's evidence was held back, since the
+   *  fall-back it renders instead says "no evidence yet". */
+  readonly suppressions: readonly SlotSuppression[];
 }
 
 /**
@@ -351,14 +479,48 @@ export interface BuildArtifactResult {
  * be filled. (An earlier version gated it alongside `cover.subject` so that a
  * caller supplying neither stayed byte-identical — that traded a safety
  * statement for test convenience.)
+ *
+ * See `assembledOnOrNull` below for why `method.provenance`'s date input is
+ * validated before it is allowed anywhere near `footer()`.
  */
+
+/**
+ * A calendar date and nothing else.
+ *
+ * THE HOLE THIS CLOSES: `method.provenance` interpolates `assembledOn` into
+ * Lane C's `footer()` — and the structural-copy path deliberately bypasses
+ * `filterOutput`, because the banner it also carries contains "urgent" and
+ * "999" by design. So `assembledOn` was an unscreened caller string flowing
+ * straight into rendered output on a path built on the promise that its words
+ * can only ever be fixed copy. Passing
+ * `"and Margaret has severe heart failure requiring urgent review"` produced,
+ * verbatim in the pack: "Assembled by Margaret Ellis using Verity on and
+ * Margaret has severe heart failure requiring urgent review from documents
+ * they supplied..." — an unquoted clinical assertion about the person, wearing
+ * Lane C's copy as cover. Exactly the failure this pipeline exists to prevent.
+ *
+ * The invariant cannot rest on callers being careful: the structural path must
+ * be INCAPABLE of carrying a claim about the person. `YYYY-MM-DD` is what the
+ * route supplies, is unambiguous, and cannot express a sentence. Anything else
+ * leaves the slot honestly omitted as `awaiting_fixed_copy` — the existing,
+ * already-tested fall-through — rather than dated with something unscreened.
+ */
+const ISO_CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function assembledOnOrNull(assembledOn: string | undefined): string | null {
+  if (assembledOn === undefined || !ISO_CALENDAR_DATE.test(assembledOn)) return null;
+  return assembledOn;
+}
+
+/** The copy source per structural slot key — see the block comment above. */
 const STRUCTURAL_COPY_SOURCES: Readonly<Record<string, (input: BuildArtifactInput) => string | null>> = {
   'cover.subject': (input) => input.person?.display_name ?? null,
   'cover.scope': () => PERSISTENT_BANNER,
-  'method.provenance': (input) =>
-    input.person === undefined || input.assembledOn === undefined
-      ? null
-      : footer(input.person.display_name, input.assembledOn),
+  'method.provenance': (input) => {
+    const date = assembledOnOrNull(input.assembledOn);
+    if (input.person === undefined || date === null) return null;
+    return footer(input.person.display_name, date);
+  },
 };
 
 /** Which `FRAMEWORK_CITATIONS` entry fills a given framework-citation slot
@@ -446,6 +608,7 @@ export function buildArtifact(input: BuildArtifactInput): BuildArtifactResult {
   const assertions: Assertion[] = [];
   const omissions: SlotOmission[] = [];
   const structuralAssertions: StructuralAssertion[] = [];
+  const suppressions: SlotSuppression[] = [];
 
   for (const { section, slot } of slotsOf(template)) {
     if (isStructuralCopySlot(slot)) {
@@ -488,6 +651,7 @@ export function buildArtifact(input: BuildArtifactInput): BuildArtifactResult {
     }
 
     const resolution = resolveSlot(slot, facts, claimsById);
+    if (resolution.suppression !== null) suppressions.push(resolution.suppression);
     if (resolution.omitted) {
       if (resolution.omission_reason === null) {
         throw new Error(`omitted slot "${slot.key}" carries no omission reason`);
@@ -506,7 +670,7 @@ export function buildArtifact(input: BuildArtifactInput): BuildArtifactResult {
       .map((id) => factsById.get(id))
       .filter((fact): fact is Fact => fact !== undefined);
 
-    const text = resolvedFacts.length > 0 ? composeText(resolvedFacts) : '';
+    const text = resolvedFacts.length > 0 ? composeSlotText(slot, resolvedFacts) : '';
 
     assertions.push({
       id: randomUUID(),
@@ -529,5 +693,6 @@ export function buildArtifact(input: BuildArtifactInput): BuildArtifactResult {
     },
     omissions,
     structuralAssertions,
+    suppressions,
   };
 }

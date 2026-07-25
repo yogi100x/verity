@@ -28,7 +28,12 @@ import { detectGaps } from '@/lib/detectors/gaps';
 import { loadTemplates, slotsOf, levelsNotAvailableInDomain } from '@/lib/ai/templates';
 import type { Artifact, ArtifactTemplate, Claim, Conflict, Fact, Source } from '@/lib/contracts';
 import { CaseSnapshot } from '@/lib/contracts';
-import type { BackingClaim, SlotOmission, StructuralAssertion } from '@/lib/ai/artifacts';
+import type {
+  BackingClaim,
+  SlotOmission,
+  SlotSuppression,
+  StructuralAssertion,
+} from '@/lib/ai/artifacts';
 import fixtureRaw from '@/fixtures/margaret.json';
 
 export const dynamic = 'force-dynamic';
@@ -253,6 +258,7 @@ function artifactViewFor(
   artifact: Artifact,
   omissions: readonly SlotOmission[],
   structuralAssertions: readonly StructuralAssertion[],
+  suppressions: readonly SlotSuppression[],
   factsById: ReadonlyMap<string, Fact>,
   claimById: ReadonlyMap<string, Claim>,
   sourcesById: ReadonlyMap<string, Pick<Source, 'kind' | 'title'>>,
@@ -260,6 +266,10 @@ function artifactViewFor(
 ): InspectArtifactView {
   const assertionBySlotKey = new Map(artifact.assertions.map((a) => [a.slot_key, a] as const));
   const structuralBySlotKey = new Map(structuralAssertions.map((s) => [s.slot_key, s] as const));
+  // A slot that matched real, verified evidence and had it withheld renders
+  // the same "what to ask for" prompt as a slot with nothing behind it. This
+  // map is what lets the page tell the two apart — see `SlotSuppression`.
+  const suppressionBySlotKey = new Map(suppressions.map((s) => [s.slot_key, s] as const));
   const slotsTotal = slotsOf(template).length;
 
   interface SectionBucket {
@@ -323,6 +333,8 @@ function artifactViewFor(
       citations: citationsForFactIds(assertion.fact_ids, factsById, claimById, sourcesById),
       state,
       verbatim_attribution: structural?.attribution ?? null,
+      verbatim_source: structural?.source ?? null,
+      suppression: suppressionBySlotKey.get(slot.key) ?? null,
     });
   }
 
@@ -349,7 +361,19 @@ function artifactViewFor(
     title: template.title,
     audience: template.audience,
     sections,
-    counts: { slots_total: slotsTotal, filled, verbatim_copy: verbatimCopy, gap_prompted: gapPrompted, omitted },
+    counts: {
+      slots_total: slotsTotal,
+      filled,
+      verbatim_copy: verbatimCopy,
+      gap_prompted: gapPrompted,
+      omitted,
+      // Counted from the assertions actually rendered, not from
+      // `suppressions.length`: a suppression on a slot with no gap_prompt ends
+      // up omitted, and would otherwise be double-counted here.
+      suppressed: artifact.assertions.filter(
+        (a) => !a.citation_verified && !structuralKeys.has(a.slot_key) && suppressionBySlotKey.has(a.slot_key),
+      ).length,
+    },
     omissions: omissions.map((o) => ({
       slot_key: o.slot_key,
       label: o.label,
@@ -394,7 +418,7 @@ function artifactsFor(
   const questionByConflictId = new Map(conflicts.map((c) => [c.id, c.generated_question] as const));
 
   return loadTemplates().map((template) => {
-    const { artifact, omissions, structuralAssertions } = buildArtifact({
+    const { artifact, omissions, structuralAssertions, suppressions } = buildArtifact({
       template,
       facts: rawFacts,
       claimsById,
@@ -409,6 +433,7 @@ function artifactsFor(
       artifact,
       omissions,
       structuralAssertions,
+      suppressions,
       factsById,
       claimById,
       sourcesById,
