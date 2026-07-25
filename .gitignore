@@ -32,3 +32,4 @@ demo/uploads/
 # test
 coverage/
 .env*
+fixtures/recorded/
