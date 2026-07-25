@@ -8,6 +8,7 @@ import {
 } from '@/lib/ai/extract';
 import type { InspectReportView } from '@/lib/ai/inspect-html';
 import { Claim } from '@/lib/contracts';
+import fixture from '@/fixtures/margaret.json';
 
 const JUDGEMENT_KEY_RE = /severity|urgency|priority|rank|risk|score/i;
 
@@ -106,8 +107,10 @@ describe('partitionClaims', () => {
 describe('extractFromFixtures', () => {
   const reports = extractFromFixtures();
 
-  it('produces one report per source (4 reports)', () => {
-    expect(reports).toHaveLength(4);
+  it('produces one report per source', () => {
+    // Derived, not hardcoded: the fixture gains sources over time (the care-log
+    // was seeded after this suite was written) and this test must not care.
+    expect(reports).toHaveLength(fixture.sources.length);
   });
 
   it('reproduces the fixture-wide numbers: 17 extracted, 1 dropped', () => {
