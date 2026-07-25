@@ -124,8 +124,50 @@ export function reconcile(
     groups,
     conflicts,
     unmatched: unmatchedSubjects(groups),
-    facts,
+    facts: linkFactsToConflicts(facts, conflicts),
   };
+}
+
+/**
+ * Back-link each fact to the `Conflict` its own claims are part of.
+ *
+ * `Fact.conflict_id` was being left null by every path through this module
+ * even when the fact's claims had produced a conflict two lines earlier — the
+ * contract declares the field and `fixtures/margaret.json` sets it, so every
+ * consumer that joins a disputed fact to the question it raises (the artefact
+ * `conflict` renderer, Lane B's timeline) silently got nothing. The
+ * disagreement was detected and then thrown away at the seam.
+ *
+ * Membership is by claim id, never by re-deriving the disagreement: a fact
+ * belongs to a conflict when one of its supporting claims is one of the
+ * conflict's claims. Claims of a superseded fact are excluded from conflict
+ * detection upstream, so a superseded fact is not linked — a resolved
+ * disagreement does not come back as a current question.
+ *
+ * Non-destructive, like `applySupersession`: a `conflict_id` already set on an
+ * incoming fact is preserved when this pass finds no match for it.
+ */
+function linkFactsToConflicts(
+  facts: readonly Fact[],
+  conflicts: readonly Conflict[],
+): Fact[] {
+  if (conflicts.length === 0) return [...facts];
+
+  const conflictIdByClaimId = new Map<string, string>();
+  for (const conflict of conflicts) {
+    for (const claimId of conflict.claim_ids) {
+      conflictIdByClaimId.set(claimId, conflict.id);
+    }
+  }
+
+  return facts.map((fact) => {
+    for (const claimId of fact.supporting_claim_ids) {
+      const conflictId = conflictIdByClaimId.get(claimId);
+      if (conflictId === undefined) continue;
+      return fact.conflict_id === conflictId ? fact : { ...fact, conflict_id: conflictId };
+    }
+    return fact;
+  });
 }
 
 /**

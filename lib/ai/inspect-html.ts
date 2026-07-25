@@ -14,7 +14,7 @@
  * single interpolation site, with no exceptions.
  */
 
-import type { Conflict, Fact } from '@/lib/contracts';
+import type { Assertion, Conflict, Fact, Slot } from '@/lib/contracts';
 
 /** A structural view of an extraction report — deliberately independent of
  *  `lib/ai/extract.ts` (owned by a concurrent agent) so this file has no
@@ -154,6 +154,104 @@ const _factViewMatchesContract: _FactViewMatchesContract = true;
 void _factViewMatchesContract;
 
 /**
+ * A structural view of one generated `Artifact`, joined against its
+ * `ArtifactTemplate` for section/slot metadata — deliberately independent of
+ * `lib/ai/artifacts.ts` / `lib/ai/templates.ts` (same pattern as the other
+ * views in this file) so this module keeps no compile-time coupling to the
+ * pipeline. Satisfied structurally by whatever the route builds from the
+ * real `Artifact` + `ArtifactTemplate`.
+ *
+ * `_artifactSlotViewMatchesContract` below ties the assertion-derived slot
+ * fields to the frozen `Assertion` contract and the template-derived fields
+ * to the frozen `Slot` contract, the same way `_factViewMatchesContract` and
+ * `_viewCoversConflictContract` do above.
+ */
+export interface InspectArtifactView {
+  readonly template_key: string;
+  readonly title: string;
+  readonly audience: string;
+  readonly sections: ReadonlyArray<{
+    readonly key: string;
+    readonly title: string;
+    readonly slots: ReadonlyArray<{
+      readonly slot_key: string;
+      readonly label: string;
+      readonly renderer: string;
+      readonly text: string;
+      /** The frozen template's fall-back copy, read live at render time rather
+       *  than stored in `Assertion.text`. Rendered only when the slot fell
+       *  through; never mixed with composed evidence text. */
+      readonly gap_prompt: string | null;
+      /** The resolved facts behind this slot, structured — what the `list` and
+       *  `table` renderers lay out, instead of re-splitting `text`. */
+      readonly values: ReadonlyArray<{
+        readonly subject: string;
+        readonly value: string;
+        readonly valid_from: string | null;
+        readonly status: string;
+      }>;
+      /** `Conflict.generated_question` for any resolved fact that is part of a
+       *  disagreement — what the `conflict` renderer leads with. Never the
+       *  conflicting claims themselves: those are reachable from superseded
+       *  claim ids and must not resurface as current evidence here. */
+      readonly conflict_questions: readonly string[];
+      /** Level words present in this slot's evidence that the official DST form
+       *  does not offer for this domain (three domains cap at High; altered
+       *  states of consciousness has no Severe). Rendered as a warning, never
+       *  silently presented as a level. */
+      readonly form_invalid_levels: readonly string[];
+      readonly citation_verified: boolean;
+      /** Empty when the slot fell through to its gap prompt. */
+      readonly citations: ReadonlyArray<{
+        readonly quote: string;
+        readonly source_title: string;
+      }>;
+      readonly state: 'filled' | 'gap_prompt';
+    }>;
+  }>;
+  readonly counts: {
+    readonly slots_total: number;
+    readonly filled: number;
+    readonly gap_prompted: number;
+    readonly omitted: number;
+  };
+  /** Every slot the template defines that produced no assertion, NAMED. A bare
+   *  "3 omitted" count let the CHC pack's cover page and method section vanish
+   *  without trace; a reader could not tell a missing scope statement from an
+   *  empty clinical domain. Structurally satisfied by `SlotOmission[]` from
+   *  `lib/ai/artifacts.ts` — if `SlotOmissionReason` ever gains a member, the
+   *  route stops compiling against this union. */
+  readonly omissions: ReadonlyArray<{
+    readonly slot_key: string;
+    readonly label: string;
+    readonly section_title: string;
+    readonly reason: 'awaiting_fixed_copy' | 'no_evidence';
+  }>;
+}
+
+type ArtifactSlotView = InspectArtifactView['sections'][number]['slots'][number];
+
+/**
+ * Load-bearing, typecheck-time: the assertion-derived slot fields
+ * (`slot_key`, `text`, `citation_verified`) must stay assignable from the
+ * frozen `Assertion` contract, and the template-derived fields (`label`,
+ * `renderer`) from the frozen `Slot` contract. Renaming `Assertion.text` or
+ * narrowing `Slot.renderer` would otherwise leave this view compiling
+ * happily while quietly rendering nothing for it.
+ */
+type ArtifactAssertionDerivedKeys = 'slot_key' | 'text' | 'citation_verified';
+type _ArtifactSlotViewMatchesContract =
+  Pick<ArtifactSlotView, ArtifactAssertionDerivedKeys> extends Pick<Assertion, ArtifactAssertionDerivedKeys>
+    ? Pick<ArtifactSlotView, 'label'> extends Pick<Slot, 'label'>
+      ? Slot['renderer'] extends ArtifactSlotView['renderer']
+        ? true
+        : never
+      : never
+    : never;
+const _artifactSlotViewMatchesContract: _ArtifactSlotViewMatchesContract = true;
+void _artifactSlotViewMatchesContract;
+
+/**
  * A date for display. Returns RAW text — the caller escapes, exactly once, at
  * the interpolation site. This used to escape internally and then be escaped
  * again by its caller, so a date carrying an `&` rendered as `&amp;amp;`.
@@ -262,6 +360,228 @@ function renderFactsSection(facts: readonly InspectFactView[]): string {
         can be checked rather than taken on trust.
       </p>
       ${groups}
+    </section>`;
+}
+
+function renderArtifactCitation(
+  c: InspectArtifactView['sections'][number]['slots'][number]['citations'][number],
+): string {
+  return `
+    <li class="artifact-citation">
+      <span class="artifact-citation-source">${escapeHtml(c.source_title)}</span>
+      <blockquote class="mono artifact-citation-quote">${escapeHtml(c.quote)}</blockquote>
+    </li>`;
+}
+
+type ArtifactSlotValue = ArtifactSlotView['values'][number];
+
+/** A value's own words, never re-worded: '<subject>: <value>' where the
+ *  subject and value both come verbatim from the reconciled `Fact`. */
+function renderValueList(values: readonly ArtifactSlotValue[]): string {
+  const items = values
+    .map(
+      (v) => `
+      <li class="artifact-value-item">
+        <span class="artifact-value-subject">${escapeHtml(v.subject)}</span>
+        <span class="artifact-value-text">${escapeHtml(v.value)}</span>
+      </li>`,
+    )
+    .join('');
+  return `<ul class="artifact-slot-list">${items}</ul>`;
+}
+
+function renderValueTable(values: readonly ArtifactSlotValue[]): string {
+  const rows = values
+    .map(
+      (v) => `
+        <tr>
+          <td>${escapeHtml(v.subject)}</td>
+          <td>${escapeHtml(v.value)}</td>
+          <td>${v.valid_from === null ? '—' : escapeHtml(v.valid_from)}</td>
+          <td>${escapeHtml(v.status)}</td>
+        </tr>`,
+    )
+    .join('');
+  return `
+      <table class="artifact-slot-table">
+        <thead>
+          <tr><th>Item</th><th>What the record says</th><th>Recorded from</th><th>Agreement</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+}
+
+/** The `quote` renderer's body IS the verbatim citations — the slot exists to
+ *  show the source's own wording, so composed text would defeat it. */
+function renderQuoteBody(slot: ArtifactSlotView): string {
+  return `
+        <p class="artifact-slot-evidence-label">Verbatim from the record:</p>
+        <ul class="artifact-citations">${slot.citations.map(renderArtifactCitation).join('')}</ul>`;
+}
+
+/** The `conflict` renderer leads with the question the disagreement raises,
+ *  then the differing values — not with a flattened '<subject>: Disputed — 3
+ *  sources give different answers' line, which reads as a finding rather than
+ *  as an open question. */
+function renderConflictBody(slot: ArtifactSlotView): string {
+  const questions = slot.conflict_questions
+    .map((q) => `<p class="artifact-slot-conflict-question">${escapeHtml(q)}</p>`)
+    .join('');
+  return `${questions}${renderValueList(slot.values)}`;
+}
+
+/**
+ * The slot's declared `renderer` decides the shape. Ignoring it — rendering
+ * every slot as one paragraph of '<subject>: <value>' lines — meant a `table`
+ * slot, a `list` slot and a `quote` slot all came out identical, and the pack
+ * did not resemble the form an assessor reads it against. Unknown renderer
+ * values fall back to prose rather than rendering nothing.
+ */
+function renderFilledBody(slot: ArtifactSlotView): string {
+  if (slot.values.length === 0) {
+    return `<p class="artifact-slot-text">${escapeHtml(slot.text)}</p>`;
+  }
+  switch (slot.renderer) {
+    case 'list':
+      return renderValueList(slot.values);
+    case 'table':
+      return renderValueTable(slot.values);
+    case 'quote':
+      return renderQuoteBody(slot);
+    case 'conflict':
+      return renderConflictBody(slot);
+    default:
+      return `<p class="artifact-slot-text">${escapeHtml(slot.text)}</p>`;
+  }
+}
+
+function renderLevelWarning(slot: ArtifactSlotView): string {
+  if (slot.form_invalid_levels.length === 0) return '';
+  const names = slot.form_invalid_levels.map(escapeHtml).join(', ');
+  return `
+        <p class="artifact-slot-level-warning" data-form-invalid-levels="${escapeHtml(String(slot.form_invalid_levels.length))}">
+          The record uses a level this domain does not have on the official Decision Support Tool form: ${names}. Shown above as the record's own words, not as a level for this pack.
+        </p>`;
+}
+
+function renderArtifactSlot(slot: ArtifactSlotView): string {
+  const stateClass = slot.state === 'filled' ? 'artifact-slot-filled' : 'artifact-slot-gap';
+  // The `quote` renderer's body already IS the citation list; repeating it
+  // below would show every quote twice.
+  const evidence =
+    slot.renderer === 'quote'
+      ? ''
+      : `
+        <p class="artifact-slot-evidence-label">Evidence-backed — from the record:</p>
+        <ul class="artifact-citations">${slot.citations.map(renderArtifactCitation).join('')}</ul>`;
+
+  const body =
+    slot.state === 'filled'
+      ? `${renderFilledBody(slot)}${renderLevelWarning(slot)}${evidence}`
+      : `
+        <p class="artifact-slot-gap-label">No evidence yet — what to ask for</p>
+        <p class="artifact-slot-text artifact-slot-gap-text">${escapeHtml(slot.gap_prompt ?? '')}</p>`;
+
+  return `
+    <div class="artifact-slot ${stateClass}" data-slot-key="${escapeHtml(slot.slot_key)}" data-renderer="${escapeHtml(slot.renderer)}" data-state="${escapeHtml(slot.state)}" data-citations="${escapeHtml(String(slot.citations.length))}">
+      <p class="artifact-slot-label">${escapeHtml(slot.label)}</p>
+      ${body}
+    </div>`;
+}
+
+function renderArtifactSection(section: InspectArtifactView['sections'][number]): string {
+  return `
+    <div class="artifact-section">
+      <h4 class="artifact-section-heading">${escapeHtml(section.title)}</h4>
+      ${section.slots.map(renderArtifactSlot).join('')}
+    </div>`;
+}
+
+/** Why a named slot is absent. Lane A's own words about its own behaviour —
+ *  not clinical copy, and not a substitute for the fixed copy the slot itself
+ *  is waiting for. */
+const OMISSION_EXPLANATION: Record<InspectArtifactView['omissions'][number]['reason'], string> = {
+  awaiting_fixed_copy:
+    'Not evidence-driven: this slot needs fixed wording (a cover statement, a scope statement, a provenance note), not facts from the record. That wording is not this pipeline’s to write and it will not be invented here, so the slot is left out and named rather than filled with a guess.',
+  no_evidence:
+    'Evidence-driven, but nothing in the record matches it and the template offers no fall-back prompt for it.',
+};
+
+/**
+ * The omitted slots, listed by name. This block is the fix for a real defect:
+ * the CHC pack's cover page and method section produced no assertions and
+ * disappeared behind a bare “3 omitted”, so a reviewer could not tell three
+ * missing structural pages from three empty clinical domains. An evidence pack
+ * arriving at an ICB panel without a statement of who it concerns, without a
+ * scope statement and without a provenance section is a serious defect; it may
+ * only ever be an EXPLICIT one.
+ */
+function renderArtifactOmissions(artifact: InspectArtifactView): string {
+  const { omissions } = artifact;
+  if (omissions.length === 0) {
+    return '<p class="artifact-omissions-none" data-omissions="0">Nothing was left out: every slot in this template produced either evidence or a prompt for the missing document.</p>';
+  }
+
+  const items = omissions
+    .map(
+      (o) => `
+        <li class="artifact-omission" data-omitted-slot-key="${escapeHtml(o.slot_key)}" data-omission-reason="${escapeHtml(o.reason)}">
+          <span class="artifact-omission-name">${escapeHtml(o.section_title)} — ${escapeHtml(o.label)}</span>
+          <span class="artifact-omission-why">${escapeHtml(OMISSION_EXPLANATION[o.reason])}</span>
+        </li>`,
+    )
+    .join('');
+
+  return `
+      <div class="artifact-omissions" data-omissions="${escapeHtml(String(omissions.length))}">
+        <h4 class="artifact-omissions-heading">Left out of this document (${escapeHtml(String(omissions.length))}) — named, not hidden</h4>
+        <ul class="artifact-omissions-list">${items}</ul>
+      </div>`;
+}
+
+function renderArtifactCard(artifact: InspectArtifactView): string {
+  const { counts } = artifact;
+  const countLine = `${counts.slots_total} slots · ${counts.filled} filled from evidence · ${counts.gap_prompted} asking for a document · ${counts.omitted} left out (each one named below)`;
+  return `
+    <div class="artifact-card" data-template-key="${escapeHtml(artifact.template_key)}" data-slots-total="${escapeHtml(String(counts.slots_total))}" data-filled="${escapeHtml(String(counts.filled))}" data-gap-prompted="${escapeHtml(String(counts.gap_prompted))}" data-omitted="${escapeHtml(String(counts.omitted))}">
+      <h3 class="artifact-title">${escapeHtml(artifact.title)}</h3>
+      <p class="artifact-audience">For: ${escapeHtml(artifact.audience)}</p>
+      <p class="artifact-count-line">${escapeHtml(countLine)}</p>
+      ${renderArtifactOmissions(artifact)}
+      ${artifact.sections.map(renderArtifactSection).join('')}
+    </div>`;
+}
+
+/**
+ * "Generated documents" — the artefact-rendering view. Placed directly after
+ * the timeline it is built from and before the per-source appendix: the
+ * timeline explains WHY the fact set looks the way it does, and this section
+ * shows what gets produced FROM that same fact set through a fixed template.
+ * Reading order stays counts -> disagreement -> timeline -> what gets
+ * generated -> raw evidence appendix.
+ *
+ * Every interpolated value — template title, audience, slot label, composed
+ * text, gap prompt text, quotes, source titles — goes through `escapeHtml`.
+ * A slot's gap-prompt copy comes verbatim from the frozen template in
+ * `fixtures/templates.json`; nothing in this function invents replacement
+ * prose for it.
+ */
+function renderArtifactsSection(artifacts: readonly InspectArtifactView[]): string {
+  const body =
+    artifacts.length === 0
+      ? '<p class="empty-note">No artefacts have been generated yet.</p>'
+      : artifacts.map(renderArtifactCard).join('');
+
+  return `
+    <section class="artifacts-section" id="artifacts">
+      <h2 class="artifacts-heading">Generated documents</h2>
+      <p class="artifacts-explainer">
+        Each document below is built from the same set of facts, filled through a
+        fixed template. A slot with no supporting evidence shows what document to
+        ask for instead of a blank space — this product will not write a sentence
+        it cannot back with a verbatim quote from something already in the record.
+      </p>
+      ${body}
     </section>`;
 }
 
@@ -865,6 +1185,170 @@ const STYLE = `
     color: var(--unverified-ink);
     border-color: var(--unverified-mid);
   }
+  .artifacts-section {
+    background: white;
+    border: 2px solid var(--brand);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 3rem;
+  }
+  .artifacts-heading {
+    font-size: 1.5rem;
+    margin: 0 0 0.5rem;
+    color: var(--brand);
+  }
+  .artifacts-explainer {
+    max-width: 60rem;
+    color: var(--ink-muted);
+    font-size: 0.95rem;
+    margin: 0 0 1.5rem;
+  }
+  .artifact-card {
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .artifact-card:last-child { margin-bottom: 0; }
+  .artifact-title {
+    font-size: 1.2rem;
+    margin: 0 0 0.25rem;
+    color: var(--brand);
+  }
+  .artifact-audience {
+    color: var(--ink-muted);
+    font-size: 0.9rem;
+    margin: 0 0 0.5rem;
+  }
+  .artifact-count-line {
+    font-weight: 600;
+    margin: 0 0 1.25rem;
+    color: var(--ink);
+  }
+  .artifact-section { margin-bottom: 1.5rem; }
+  .artifact-section:last-child { margin-bottom: 0; }
+  .artifact-section-heading {
+    font-size: 1rem;
+    margin: 0 0 0.75rem;
+    color: var(--ink);
+    text-transform: capitalize;
+  }
+  .artifact-slot {
+    border-radius: 6px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.75rem;
+  }
+  .artifact-slot:last-child { margin-bottom: 0; }
+  .artifact-slot-label {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--ink-muted);
+    margin: 0 0 0.5rem;
+  }
+  .artifact-slot-filled {
+    background: var(--citation-bg);
+    border: 1px solid var(--citation-mid);
+  }
+  .artifact-slot-text {
+    margin: 0 0 0.5rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .artifact-slot-evidence-label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--citation-ink);
+    margin: 0 0 0.4rem;
+  }
+  .artifact-citations { list-style: none; margin: 0; padding: 0; }
+  .artifact-citation {
+    background: white;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .artifact-citation:last-child { margin-bottom: 0; }
+  .artifact-citation-source {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    margin-bottom: 0.25rem;
+  }
+  .artifact-citation-quote {
+    margin: 0;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .artifact-slot-gap {
+    background: var(--paper);
+    border: 1px dashed var(--hairline);
+  }
+  .artifact-slot-gap-label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--ink-muted);
+    margin: 0 0 0.4rem;
+  }
+  .artifact-slot-gap-text {
+    color: var(--ink-muted);
+    font-style: italic;
+  }
+  .artifact-slot-list { margin: 0 0 0.5rem; padding-left: 1.1rem; }
+  .artifact-value-item { margin-bottom: 0.3rem; }
+  .artifact-value-subject { font-weight: 600; margin-right: 0.4rem; }
+  .artifact-slot-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 0 0 0.6rem;
+    background: white;
+  }
+  .artifact-slot-table th,
+  .artifact-slot-table td {
+    border: 1px solid var(--hairline);
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .artifact-slot-conflict-question {
+    margin: 0 0 0.5rem;
+    font-weight: 600;
+    color: var(--brand);
+  }
+  .artifact-slot-level-warning {
+    margin: 0 0 0.6rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 4px;
+    background: var(--unverified-bg);
+    border: 1px solid var(--unverified-mid);
+    color: var(--unverified-ink);
+    font-size: 0.85rem;
+  }
+  .artifact-omissions {
+    background: var(--unverified-bg);
+    border: 1px solid var(--unverified-mid);
+    border-radius: 6px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.25rem;
+  }
+  .artifact-omissions-heading {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+    color: var(--unverified-ink);
+  }
+  .artifact-omissions-none {
+    color: var(--ink-muted);
+    font-size: 0.88rem;
+    margin: 0 0 1.25rem;
+  }
+  .artifact-omissions-list { list-style: none; margin: 0; padding: 0; }
+  .artifact-omission { margin-bottom: 0.6rem; }
+  .artifact-omission:last-child { margin-bottom: 0; }
+  .artifact-omission-name { display: block; font-weight: 600; font-size: 0.88rem; }
+  .artifact-omission-why { display: block; font-size: 0.83rem; color: var(--ink-muted); }
 `;
 
 /**
@@ -877,6 +1361,7 @@ export function renderInspectPage(
   pageNotice: string | null = null,
   conflicts: readonly InspectConflictView[] = [],
   facts: readonly InspectFactView[] = [],
+  artifacts: readonly InspectArtifactView[] = [],
 ): string {
   // Interpolated, not spliced into the finished document by the caller: a
   // String.replace() on the rendered page would treat `$&` in the note as a
@@ -901,18 +1386,23 @@ export function renderInspectPage(
         </p>
         ${/* Reading order, chosen for the reader and not for a test:
              counts -> the disagreement -> why the timeline looks like that ->
-             the raw per-source evidence. The two reconciled sections belong
-             together and above the per-source blocks, because the blocks are
-             an appendix: full transcripts and every kept/dropped row, which a
-             reviewer scrolls into only once a derived claim looks wrong. The
-             timeline sits directly under the conflict it explains — the
-             question "why are only three of the four furosemide claims in
-             that conflict?" is answered by the struck-through March period,
-             and burying it below four transcript dumps meant nobody ever
-             connected the two. */ ''}
+             what gets generated from that same fact set -> the raw per-source
+             evidence. The three reconciled sections belong together and above
+             the per-source blocks, because the blocks are an appendix: full
+             transcripts and every kept/dropped row, which a reviewer scrolls
+             into only once a derived claim looks wrong. The timeline sits
+             directly under the conflict it explains — the question "why are
+             only three of the four furosemide claims in that conflict?" is
+             answered by the struck-through March period. The artefacts
+             section sits directly under the timeline, because it is built
+             from the very facts the timeline just showed — the same fact set
+             feeding two different templates is the "templates are data"
+             proof, and it belongs next to the facts it proves, not buried
+             below four transcript dumps. */ ''}
         ${renderSummaryBar(reports, conflicts)}
         ${renderConflictsSection(conflicts)}
         ${renderFactsSection(facts)}
+        ${renderArtifactsSection(artifacts)}
         ${reports.map(renderSource).join('')}`;
 
   return `<!doctype html>

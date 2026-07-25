@@ -18,11 +18,15 @@ import {
   escapeHtml,
   type InspectConflictView,
   type InspectFactView,
+  type InspectArtifactView,
 } from '@/lib/ai/inspect-html';
 import { reconcile } from '@/lib/ai/reconcile';
 import { periodDecisionFor } from '@/lib/ai/facts';
-import type { Claim, Fact, Source } from '@/lib/contracts';
+import { buildArtifact } from '@/lib/ai/artifacts';
+import { loadTemplates, slotsOf, levelsNotAvailableInDomain } from '@/lib/ai/templates';
+import type { Artifact, ArtifactTemplate, Claim, Fact, Source } from '@/lib/contracts';
 import { CaseSnapshot } from '@/lib/contracts';
+import type { SlotOmission } from '@/lib/ai/artifacts';
 import fixtureRaw from '@/fixtures/margaret.json';
 
 export const dynamic = 'force-dynamic';
@@ -91,9 +95,17 @@ const fixture = CaseSnapshot.parse(fixtureRaw);
  * fixed at the source now (see `extractFromFixtures`), so `report.kept` ids
  * are stable and this function needs no branch.
  */
-function reconcileViewsFor(
-  reports: readonly ExtractionReport[],
-): { conflicts: InspectConflictView[]; facts: InspectFactView[] } {
+interface ReconcileViews {
+  readonly conflicts: InspectConflictView[];
+  readonly facts: InspectFactView[];
+  /** The raw derived facts (superseded ones included) — what `buildArtifact`
+   *  needs, since it filters to live facts internally. */
+  readonly rawFacts: readonly Fact[];
+  readonly claimById: ReadonlyMap<string, Claim>;
+  readonly sourcesById: ReadonlyMap<string, Pick<Source, 'kind' | 'title'>>;
+}
+
+function reconcileViewsFor(reports: readonly ExtractionReport[]): ReconcileViews {
   const sourcesById = new Map<string, Pick<Source, 'kind' | 'title'>>();
   for (const report of reports) {
     sourcesById.set(report.source.id, { kind: report.source.kind, title: report.source.title });
@@ -163,7 +175,206 @@ function reconcileViewsFor(
       }),
   }));
 
-  return { conflicts: conflictViews, facts: factViews };
+  return { conflicts: conflictViews, facts: factViews, rawFacts: facts, claimById, sourcesById };
+}
+
+/**
+ * Every verified citation backing a slot's resolved facts: joins each
+ * `fact_id` back to the fact, then each of ITS `supporting_claim_ids` back to
+ * a claim — but only claims with `verified_substring === true` are shown as
+ * evidence. `isVerifiedBacked` (`lib/ai/artifacts.ts`) only requires ONE
+ * verified supporting claim to let a fact back a slot; a fact's other
+ * supporting claims may be unverified, and those must never be rendered as
+ * if they were evidence.
+ */
+function citationsForFactIds(
+  factIds: readonly string[],
+  factsById: ReadonlyMap<string, Fact>,
+  claimById: ReadonlyMap<string, Claim>,
+  sourcesById: ReadonlyMap<string, Pick<Source, 'kind' | 'title'>>,
+): Array<{ quote: string; source_title: string }> {
+  const citations: Array<{ quote: string; source_title: string }> = [];
+  for (const factId of factIds) {
+    const fact = factsById.get(factId);
+    if (fact === undefined) continue;
+    for (const claimId of fact.supporting_claim_ids) {
+      const claim = claimById.get(claimId);
+      if (claim === undefined || claim.verified_substring !== true) continue;
+      citations.push({
+        quote: claim.quote,
+        source_title: sourcesById.get(claim.source_id)?.title ?? claim.source_id,
+      });
+    }
+  }
+  return citations;
+}
+
+/**
+ * Build one `InspectArtifactView` from a real `Artifact` + the `ArtifactTemplate`
+ * that produced it: joins each assertion back to its slot's section/label/renderer
+ * (from the template) and each assertion's `fact_ids` back to citations (via
+ * `citationsForFactIds`).
+ *
+ * A slot the template defines but that produced no assertion is absent from
+ * the sections — but it is NOT absent from the page: `buildArtifact` returns
+ * every omission named, with a reason, and they are carried through on
+ * `omissions` and rendered. The count and the named list are cross-checked
+ * against each other below, so a slot cannot go missing silently again.
+ */
+type ArtifactSlotValue = InspectArtifactView['sections'][number]['slots'][number]['values'][number];
+
+/** `Conflict.generated_question` for every resolved fact that belongs to a
+ *  disagreement, de-duplicated and in fact order. Derived from the FACTS the
+ *  slot resolved to — which are live-only — never from `Conflict.claim_ids`,
+ *  which can still reference claims belonging to a superseded fact. */
+function conflictQuestionsFor(
+  facts: readonly Fact[],
+  questionByConflictId: ReadonlyMap<string, string>,
+): string[] {
+  const questions: string[] = [];
+  for (const fact of facts) {
+    const conflictId = fact.conflict_id;
+    if (conflictId === null) continue;
+    const question = questionByConflictId.get(conflictId);
+    if (question === undefined || questions.includes(question)) continue;
+    questions.push(question);
+  }
+  return questions;
+}
+
+function artifactViewFor(
+  template: ArtifactTemplate,
+  artifact: Artifact,
+  omissions: readonly SlotOmission[],
+  factsById: ReadonlyMap<string, Fact>,
+  claimById: ReadonlyMap<string, Claim>,
+  sourcesById: ReadonlyMap<string, Pick<Source, 'kind' | 'title'>>,
+  questionByConflictId: ReadonlyMap<string, string>,
+): InspectArtifactView {
+  const assertionBySlotKey = new Map(artifact.assertions.map((a) => [a.slot_key, a] as const));
+  const slotsTotal = slotsOf(template).length;
+
+  interface SectionBucket {
+    readonly key: string;
+    readonly title: string;
+    readonly slots: InspectArtifactView['sections'][number]['slots'][number][];
+  }
+  const sectionsByKey = new Map<string, SectionBucket>();
+  const sectionOrder: string[] = [];
+
+  for (const { section, slot } of slotsOf(template)) {
+    const assertion = assertionBySlotKey.get(slot.key);
+    if (assertion === undefined) continue; // omitted — counted, never rendered
+
+    let bucket = sectionsByKey.get(section.key);
+    if (bucket === undefined) {
+      bucket = { key: section.key, title: section.title, slots: [] };
+      sectionsByKey.set(section.key, bucket);
+      sectionOrder.push(section.key);
+    }
+
+    // Live facts only: `assertion.fact_ids` is produced by `buildArtifact`,
+    // which resolves through `liveFacts`, so a superseded fact cannot be here
+    // and this join cannot reintroduce one.
+    const resolvedFacts = assertion.fact_ids
+      .map((id) => factsById.get(id))
+      .filter((fact): fact is Fact => fact !== undefined);
+
+    const values: ArtifactSlotValue[] = resolvedFacts.map((fact) => ({
+      subject: fact.subject,
+      value: fact.canonical_value,
+      valid_from: fact.valid_from,
+      status: fact.status,
+    }));
+
+    bucket.slots.push({
+      slot_key: slot.key,
+      label: slot.label,
+      renderer: slot.renderer,
+      text: assertion.text,
+      // Read live from the frozen template, not from the stored assertion:
+      // `Assertion.text` is empty for a gap-prompted slot by design, so this
+      // copy can never go stale inside a persisted artefact.
+      gap_prompt: slot.gap_prompt,
+      values,
+      conflict_questions: conflictQuestionsFor(resolvedFacts, questionByConflictId),
+      form_invalid_levels: levelsNotAvailableInDomain(
+        section.key,
+        values.map((v) => v.value),
+      ),
+      citation_verified: assertion.citation_verified,
+      citations: citationsForFactIds(assertion.fact_ids, factsById, claimById, sourcesById),
+      // citation_verified is exactly "fact_ids non-empty" (lib/ai/artifacts.ts),
+      // so this is equivalent to `assertion.fact_ids.length > 0`.
+      state: assertion.citation_verified ? 'filled' : 'gap_prompt',
+    });
+  }
+
+  const filled = artifact.assertions.filter((a) => a.citation_verified).length;
+  const gapPrompted = artifact.assertions.length - filled;
+  const omitted = slotsTotal - artifact.assertions.length;
+
+  const sections = sectionOrder.map((key) => {
+    const bucket = sectionsByKey.get(key);
+    if (bucket === undefined) throw new Error('unreachable: section vanished from its own map');
+    return { key: bucket.key, title: bucket.title, slots: bucket.slots };
+  });
+
+  if (omitted !== omissions.length) {
+    throw new Error(
+      `omission accounting is wrong for ${template.key}: ${omitted} slots produced no assertion but ${omissions.length} were named`,
+    );
+  }
+
+  return {
+    template_key: template.key,
+    title: template.title,
+    audience: template.audience,
+    sections,
+    counts: { slots_total: slotsTotal, filled, gap_prompted: gapPrompted, omitted },
+    omissions: omissions.map((o) => ({
+      slot_key: o.slot_key,
+      label: o.label,
+      section_title: o.section_title,
+      reason: o.reason,
+    })),
+  };
+}
+
+/**
+ * Both phase-1 templates, built from the SAME reconciled fact set — the
+ * "templates are data" proof made visible: `chc_dst_pack_v1` and `gp_brief_v1`
+ * render different sections from one shared pool of facts, with no
+ * template-specific code anywhere in this route. Facts are passed WHOLE
+ * (superseded ones included); `buildArtifact` filters to live facts itself
+ * (`liveFacts` in `lib/ai/facts.ts`), so a superseded record can never fill a
+ * slot — this route does not pre-filter and must not duplicate that rule.
+ */
+function artifactsFor(
+  rawFacts: readonly Fact[],
+  claimById: ReadonlyMap<string, Claim>,
+  sourcesById: ReadonlyMap<string, Pick<Source, 'kind' | 'title'>>,
+  personId: string,
+  conflicts: readonly InspectConflictView[],
+): InspectArtifactView[] {
+  const claimsById = new Map<string, Pick<Claim, 'verified_substring'>>();
+  for (const [id, claim] of claimById) claimsById.set(id, { verified_substring: claim.verified_substring });
+
+  const factsById = new Map(rawFacts.map((f) => [f.id, f] as const));
+  const questionByConflictId = new Map(conflicts.map((c) => [c.id, c.generated_question] as const));
+
+  return loadTemplates().map((template) => {
+    const { artifact, omissions } = buildArtifact({ template, facts: rawFacts, claimsById, personId });
+    return artifactViewFor(
+      template,
+      artifact,
+      omissions,
+      factsById,
+      claimById,
+      sourcesById,
+      questionByConflictId,
+    );
+  });
 }
 
 async function reportsFor(mode: Mode): Promise<{ reports: ExtractionReport[]; note: string | null }> {
@@ -197,8 +408,9 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const { reports, note } = await reportsFor(mode);
-    const { conflicts, facts } = reconcileViewsFor(reports);
-    return html(renderInspectPage(reports, note, conflicts, facts));
+    const { conflicts, facts, rawFacts, claimById, sourcesById } = reconcileViewsFor(reports);
+    const artifacts = artifactsFor(rawFacts, claimById, sourcesById, fixture.person.id, conflicts);
+    return html(renderInspectPage(reports, note, conflicts, facts, artifacts));
   } catch (err) {
     if (err instanceof MissingCredentialsError) {
       return html(

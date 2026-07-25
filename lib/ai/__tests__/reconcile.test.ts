@@ -5,7 +5,7 @@ import {
   supersededClaimIdsFromFacts,
 } from '@/lib/ai/reconcile';
 import { GET } from '@/app/api/debug/inspect/route';
-import { CaseSnapshot, type Claim, type DatePrecision } from '@/lib/contracts';
+import { CaseSnapshot, type Claim, type Source } from '@/lib/contracts';
 import { sectionById } from './html-sections';
 import fixtureRaw from '@/fixtures/margaret.json';
 
@@ -30,6 +30,57 @@ if (fabricatedClaim === undefined) {
   throw new Error('fixture invariant broken: expected one claim with verified_substring === false');
 }
 
+function fixtureSourcesById(): ReadonlyMap<string, Pick<Source, 'kind' | 'title'>> {
+  const map = new Map<string, Pick<Source, 'kind' | 'title'>>();
+  for (const source of fixture.sources) map.set(source.id, { kind: source.kind, title: source.title });
+  return map;
+}
+
+describe('reconcile — a disputed fact is linked to the conflict it is part of', () => {
+  /** `Fact.conflict_id` was being left null on every path through `reconcile`,
+   *  even for the fact whose own claims had just produced a conflict. The
+   *  contract declares the field and the fixture sets it, so every consumer
+   *  that joins a disputed fact to the question it raises — the artefact
+   *  `conflict` renderer, Lane B's timeline — silently got nothing: the
+   *  disagreement was detected and then discarded at the seam. */
+  it('sets conflict_id on the live fact whose claims are in the conflict', () => {
+    const { facts, conflicts } = reconcile(fixture.claims, fixture.person.id, {
+      sourcesById: fixtureSourcesById(),
+    });
+    const conflict = conflicts[0];
+    if (conflict === undefined) throw new Error('expected reconcile() to find a conflict');
+
+    const linked = facts.filter((f) => f.conflict_id === conflict.id);
+    expect(linked.length).toBeGreaterThan(0);
+
+    for (const fact of linked) {
+      // Linked by claim membership, and only claims the conflict actually cites.
+      expect(fact.supporting_claim_ids.some((id) => conflict.claim_ids.includes(id))).toBe(true);
+      // A resolved (superseded) disagreement must not come back as a current
+      // question: superseded claims are excluded from conflict detection, so a
+      // superseded fact is never linked.
+      expect(fact.superseded_by).toBeNull();
+    }
+
+    // A fact with no claim in any conflict keeps conflict_id null.
+    const unrelated = facts.filter(
+      (f) => !f.supporting_claim_ids.some((id) => conflicts.some((c) => c.claim_ids.includes(id))),
+    );
+    expect(unrelated.length).toBeGreaterThan(0);
+    for (const fact of unrelated) expect(fact.conflict_id).toBeNull();
+  });
+
+  it('links nothing when there is no conflict', () => {
+    const single = fixture.claims.filter((c) => c.ontology_key === 'diagnosis.heart_failure');
+    expect(single.length).toBeGreaterThan(0);
+    const { facts, conflicts } = reconcile(single, fixture.person.id, {
+      sourcesById: fixtureSourcesById(),
+    });
+    expect(conflicts).toHaveLength(0);
+    for (const fact of facts) expect(fact.conflict_id).toBeNull();
+  });
+});
+
 function idSet(ids: readonly string[]): Set<string> {
   return new Set(ids);
 }
@@ -50,7 +101,7 @@ function makeClaim(overrides: Partial<Claim> = {}): Claim {
     quote: 'furosemide 40mg was stopped',
     locator: { page: 1, char_start: 0, char_end: 10, ms_start: null, ms_end: null },
     asserted_at: '2026-06-25',
-    date_precision: 'exact' as DatePrecision,
+    date_precision: 'exact',
     provenance: 'document_extracted',
     verified_substring: true,
     ...overrides,
