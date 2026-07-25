@@ -402,8 +402,14 @@ export interface DetectConflictsOptions {
 
 /** True when at least one pair of claims in `claims` has incompatible
  *  values. Written with explicit undefined checks (rather than trusting
- *  index access) to stay clean under --noUncheckedIndexedAccess. */
-function anyPairConflicts(claims: readonly Claim[]): boolean {
+ *  index access) to stay clean under --noUncheckedIndexedAccess.
+ *
+ *  Exported because `lib/ai/facts.ts` asks the same question of a validity
+ *  period ("is this period disputed?") that this file asks of a group ("is
+ *  this group a conflict?"). A second copy lived there and had to go: if the
+ *  two ever answered differently, the page would render a `confirmed` fact
+ *  underneath a displayed disagreement about the very same claims. */
+export function anyPairConflicts(claims: readonly Claim[]): boolean {
   for (let i = 0; i < claims.length; i++) {
     const a = claims[i];
     if (a === undefined) continue;

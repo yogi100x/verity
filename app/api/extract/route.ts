@@ -2,7 +2,8 @@
  * POST /api/extract — accept one uploaded document, return its extraction
  * report as JSON.
  *
- * Routes never call `@anthropic-ai/sdk` directly (see `lib/ai/modes.ts`).
+ * Routes never call `@anthropic-ai/sdk` directly — every model call goes
+ * through `callModel` (`@/lib/modes`), the mode seam Lane D owns.
  * In `fixtures`/`replay` mode this makes no network call at all — it returns
  * the fixtures report for illustration, with an explicit `mode` field so the
  * caller knows nothing was sent over the wire. Only `live` mode extracts the
@@ -15,7 +16,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { resolveMode, anthropicFor, MissingCredentialsError } from '@/lib/ai/modes';
+import { resolveMode } from '@/lib/modes';
 import { extractFromFixtures, extractSourceLive, toWireReport } from '@/lib/ai/extract';
 import {
   assertWithinUploadLimit,
@@ -87,12 +88,9 @@ export async function POST(request: Request): Promise<Response> {
     throw err;
   }
 
-  let mode;
-  try {
-    mode = resolveMode(new URL(request.url));
-  } catch (err) {
-    return errorResponse(400, err instanceof Error ? err.message : 'Could not resolve mode.');
-  }
+  // Never throws (see lib/modes/resolve-mode.ts): an invalid or missing
+  // value falls back to 'fixtures', the safest default.
+  const mode = resolveMode({ searchParam: new URL(request.url).searchParams.get('mode') });
 
   try {
     if (mode !== 'live') {
@@ -107,16 +105,14 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
 
-    const client = anthropicFor(mode); // throws MissingCredentialsError if unset
-    if (client === null) {
-      // Defensive: anthropicFor never returns null for mode === 'live'.
-      throw new MissingCredentialsError('ANTHROPIC_API_KEY');
-    }
-
+    // `callModel` (via `extractSourceLive` -> `callForcedTool`) handles a
+    // missing ANTHROPIC_API_KEY itself by degrading to a fixture lookup —
+    // there is no credentials error to catch here any more. A `degraded`
+    // live report is a normal, successful result, not an error.
     const report = await extractSourceLive(
-      client,
       { id: randomUUID(), title, kind: input.kind },
       input,
+      { mode },
     );
 
     return json({
@@ -125,13 +121,6 @@ export async function POST(request: Request): Promise<Response> {
       drops: report.stats.claims_dropped,
     });
   } catch (err) {
-    if (err instanceof MissingCredentialsError) {
-      return errorResponse(
-        503,
-        `${err.message} Use ?mode=fixtures to try this endpoint without an API key, or set ANTHROPIC_API_KEY in .env.local.`,
-      );
-    }
-
     // Log the detail, return a fixed string. An upstream error message can
     // carry a request body, a Zod dump, or a provider payload — none of which
     // belongs in a client response.

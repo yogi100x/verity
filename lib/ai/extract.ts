@@ -18,12 +18,12 @@ import {
   type Claim,
   type Source,
 } from '@/lib/contracts';
-import { callForcedTool, type CallUsage, type MessagesClient } from '@/lib/ai/client';
+import { callForcedTool, type CallSeamOptions, type CallUsage } from '@/lib/ai/client';
 import { EXTRACTION_SYSTEM, EXTRACTION_TOOL } from '@/lib/ai/prompts';
 import { MODELS } from '@/lib/ai/models';
 import { contentBlocksFor, type SourceInput } from '@/lib/ai/documents';
 import { verifyClaim } from '@/lib/ai/verify';
-import type { Mode } from '@/lib/ai/modes';
+import type { Mode } from '@/lib/modes';
 import fixtureRaw from '@/fixtures/margaret.json';
 
 /* ============================= types ============================= */
@@ -53,13 +53,21 @@ export interface ExtractionReport {
   readonly kept: readonly Claim[];
   readonly dropped: readonly DroppedClaim[];
   readonly stats: { readonly claims_extracted: number; readonly claims_dropped: number };
-  readonly usage: CallUsage | null; // null in fixtures/replay mode
+  readonly usage: CallUsage | null; // null in fixtures/replay mode, and on a miss
   readonly mode: Mode;
   readonly retried: boolean;
   /**
-   * Set when the source could not be read reliably even after the retry. An
-   * honest statement of what could not be read, for display. Never a guess at
-   * what the unreadable text said.
+   * True only when a live call failed or timed out and a recorded fixture
+   * answered instead (see `callModel` in `@/lib/modes`). Never an error —
+   * callers may log it, never render it as a failure.
+   */
+  readonly degraded: boolean;
+  /**
+   * Set when the source could not be read reliably even after the retry, OR
+   * when no recorded fixture exists for this request in this mode. An honest
+   * statement of what could not be read, for display. Never a guess at what
+   * the unreadable text said, and never a fabricated claim standing in for a
+   * missing response.
    */
   readonly notice: string | null;
 }
@@ -86,6 +94,7 @@ export interface WireExtractionReport {
   readonly usage: CallUsage | null;
   readonly mode: Mode;
   readonly retried: boolean;
+  readonly degraded: boolean;
   readonly notice: string | null;
 }
 
@@ -105,6 +114,7 @@ export function toWireReport(report: ExtractionReport): WireExtractionReport {
     usage: report.usage,
     mode: report.mode,
     retried: report.retried,
+    degraded: report.degraded,
     notice: report.notice,
   };
 }
@@ -225,27 +235,47 @@ export function partitionClaims(
 
 /* ============================= live mode ============================= */
 
+/**
+ * NOTE ON DETERMINISM: the instruction text below must never embed anything
+ * that varies per call and is not semantically part of the extraction task —
+ * see the determinism contract in `@/lib/modes/hash.ts`. `source.title` is
+ * fine (the same document, uploaded twice, has the same title); a per-run
+ * identifier like a freshly minted `source.id` is NOT, and previously leaked
+ * in here — a request containing one can never be looked up again by
+ * fixtures/replay, and every live call for the same document would record a
+ * fixture nothing could ever hit. Deliberately title-only.
+ */
 async function runExtraction(
-  client: MessagesClient,
   source: Pick<Source, 'id' | 'title' | 'kind'>,
   input: SourceInput,
+  opts: CallSeamOptions,
   systemSuffix?: string,
-): Promise<{ transcript: string; raw: RawClaim[]; usage: CallUsage }> {
+): Promise<
+  | { readonly kind: 'ok'; readonly transcript: string; readonly raw: RawClaim[]; readonly usage: CallUsage; readonly degraded: boolean }
+  | { readonly kind: 'miss'; readonly degraded: boolean }
+> {
   const content = contentBlocksFor(
     input,
-    `Extract every claim from "${source.title}" (source id ${source.id}).`,
+    `Extract every claim from "${source.title}".`,
   );
 
-  const result = await callForcedTool(client, {
-    model: MODELS.sonnet,
-    system: EXTRACTION_SYSTEM,
-    ...(systemSuffix === undefined ? {} : { systemSuffix }),
-    content,
-    tool: EXTRACTION_TOOL,
-    effort: 'low',
-  });
+  const outcome = await callForcedTool(
+    {
+      model: MODELS.sonnet,
+      system: EXTRACTION_SYSTEM,
+      ...(systemSuffix === undefined ? {} : { systemSuffix }),
+      content,
+      tool: EXTRACTION_TOOL,
+      effort: 'low',
+    },
+    opts,
+  );
 
-  const parsed = EmitClaimsOutput.safeParse(result.input);
+  if (outcome.kind === 'miss') {
+    return { kind: 'miss', degraded: outcome.degraded };
+  }
+
+  const parsed = EmitClaimsOutput.safeParse(outcome.input);
   if (!parsed.success) {
     throw new Error(
       `extractSourceLive: emit_claims output for source ${source.id} failed ` +
@@ -253,29 +283,53 @@ async function runExtraction(
     );
   }
 
-  return { transcript: parsed.data.transcript, raw: parsed.data.claims, usage: result.usage };
+  return {
+    kind: 'ok',
+    transcript: parsed.data.transcript,
+    raw: parsed.data.claims,
+    usage: outcome.usage,
+    degraded: outcome.degraded,
+  };
 }
 
-interface Attempt {
-  readonly transcript: string;
-  readonly raw: readonly RawClaim[];
-  readonly usage: CallUsage;
-  readonly kept: readonly Claim[];
-  readonly dropped: readonly DroppedClaim[];
-}
+type Attempt =
+  | {
+      readonly kind: 'ok';
+      readonly transcript: string;
+      readonly raw: readonly RawClaim[];
+      readonly usage: CallUsage;
+      readonly kept: readonly Claim[];
+      readonly dropped: readonly DroppedClaim[];
+      readonly degraded: boolean;
+    }
+  | { readonly kind: 'miss'; readonly degraded: boolean };
 
 async function attempt(
-  client: MessagesClient,
   source: Pick<Source, 'id' | 'title' | 'kind'>,
   input: SourceInput,
+  opts: CallSeamOptions,
   systemSuffix?: string,
 ): Promise<Attempt> {
-  const { transcript, raw, usage } = await runExtraction(client, source, input, systemSuffix);
-  const { kept, dropped } = partitionClaims(raw, { id: source.id, transcript });
-  return { transcript, raw, usage, kept, dropped };
+  const result = await runExtraction(source, input, opts, systemSuffix);
+  if (result.kind === 'miss') {
+    return { kind: 'miss', degraded: result.degraded };
+  }
+  const { kept, dropped } = partitionClaims(result.raw, {
+    id: source.id,
+    transcript: result.transcript,
+  });
+  return {
+    kind: 'ok',
+    transcript: result.transcript,
+    raw: result.raw,
+    usage: result.usage,
+    kept,
+    dropped,
+    degraded: result.degraded,
+  };
 }
 
-function honestNotice(best: Attempt, title: string): string {
+function honestNotice(best: Extract<Attempt, { kind: 'ok' }>, title: string): string {
   if (best.raw.length === 0) {
     return (
       `Nothing could be read from “${title}” — no claim came back with a quote ` +
@@ -290,23 +344,51 @@ function honestNotice(best: Attempt, title: string): string {
   );
 }
 
-/** Extract from one source in live mode. Requires a client. */
+/**
+ * Extract from one source through the mode seam (`opts.mode` picks live,
+ * fixtures, or replay — see `@/lib/modes`).
+ *
+ * A `miss` (no recorded fixture answers this exact request in this mode) is
+ * handled honestly: this never invents claims and never silently returns
+ * nothing — it returns a report with zero kept claims and a `notice`
+ * explaining that no recorded response exists yet, and that live mode with a
+ * key would produce one.
+ */
 export async function extractSourceLive(
-  client: MessagesClient,
   source: Pick<Source, 'id' | 'title' | 'kind'>,
   input: SourceInput,
+  opts: CallSeamOptions,
 ): Promise<ExtractionReport> {
-  let best = await attempt(client, source, input);
+  let best = await attempt(source, input, opts);
   let retried = false;
 
-  if (shouldRetry(best.raw.length, best.dropped.length)) {
-    const boosted = await attempt(client, source, input, CONTRAST_BOOST_ADDENDUM);
+  if (best.kind === 'ok' && shouldRetry(best.raw.length, best.dropped.length)) {
+    const boosted = await attempt(source, input, opts, CONTRAST_BOOST_ADDENDUM);
     retried = true;
     // Keep whichever attempt VERIFIED more claims. Overwriting unconditionally
     // means a retry that comes back worse silently throws away a good first
     // pass — a missing claim is a bug, and this is the one place we can
-    // manufacture one for free.
-    if (boosted.kept.length > best.kept.length) best = boosted;
+    // manufacture one for free. A miss on the retry never displaces a good
+    // first attempt.
+    if (boosted.kind === 'ok' && boosted.kept.length > best.kept.length) best = boosted;
+  }
+
+  if (best.kind === 'miss') {
+    return {
+      source: { id: source.id, title: source.title, kind: source.kind },
+      transcript: '',
+      kept: [],
+      dropped: [],
+      stats: { claims_extracted: 0, claims_dropped: 0 },
+      usage: null,
+      mode: opts.mode,
+      retried,
+      degraded: best.degraded,
+      notice:
+        `No recorded response exists for this request in "${opts.mode}" mode, ` +
+        `so nothing could be shown for "${source.title}". Live mode with ` +
+        'ANTHROPIC_API_KEY set would produce and record one.',
+    };
   }
 
   const stillBad = shouldRetry(best.raw.length, best.dropped.length);
@@ -318,8 +400,9 @@ export async function extractSourceLive(
     dropped: best.dropped,
     stats: { claims_extracted: best.raw.length, claims_dropped: best.dropped.length },
     usage: best.usage,
-    mode: 'live',
+    mode: opts.mode,
     retried,
+    degraded: best.degraded,
     // Never silently return nothing: if it is still bad after the retry, say so
     // in words the reader can act on.
     notice: stillBad ? honestNotice(best, source.title) : null,
@@ -388,6 +471,7 @@ export function extractFromFixtures(): ExtractionReport[] {
       usage: null,
       mode: 'fixtures',
       retried: false,
+      degraded: false,
       notice: null,
     };
   });
@@ -395,11 +479,16 @@ export function extractFromFixtures(): ExtractionReport[] {
 
 /* ============================== entry point ============================== */
 
+/** The seam options `extractAll` threads through to every live call it makes,
+ *  minus `mode` (supplied separately, since it also selects the fixtures
+ *  path that never reaches the seam). */
+export type ExtractAllSeamOptions = Omit<CallSeamOptions, 'mode'>;
+
 /** Mode-aware entry point. The ONLY function routes should call. */
 export async function extractAll(
   mode: Mode,
+  seamOpts?: ExtractAllSeamOptions,
   live?: {
-    readonly client: MessagesClient;
     readonly sources: ReadonlyArray<{
       readonly source: Pick<Source, 'id' | 'title' | 'kind'>;
       readonly input: SourceInput;
@@ -408,14 +497,15 @@ export async function extractAll(
 ): Promise<ExtractionReport[]> {
   if (mode === 'live') {
     if (live === undefined) {
-      throw new Error('extractAll: live mode requires a client and sources');
+      throw new Error('extractAll: live mode requires sources');
     }
+    const opts: CallSeamOptions = { mode, ...seamOpts };
     return Promise.all(
-      live.sources.map(({ source, input }) => extractSourceLive(live.client, source, input)),
+      live.sources.map(({ source, input }) => extractSourceLive(source, input, opts)),
     );
   }
 
   // 'fixtures' and 'replay' both derive from fixtures/margaret.json today —
-  // replay is reserved for recorded live responses per lib/ai/modes.ts.
+  // replay is reserved for recorded live responses, see @/lib/modes.
   return extractFromFixtures();
 }

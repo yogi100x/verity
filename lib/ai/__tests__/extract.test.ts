@@ -181,6 +181,7 @@ describe('toWireReport — what a JSON response is allowed to carry', () => {
     usage: null,
     mode: 'live' as const,
     retried: false,
+    degraded: false,
     notice: null,
   };
 
