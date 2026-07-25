@@ -12,11 +12,10 @@ On your own machine only:
 
 ```bash
 cd verity
-pnpm install
-pnpm test
+./scripts/bootstrap.sh
 ```
 
-**`pnpm test` must be green.** If the keystone test fails, every lane would build against a lie. Fix it before launching anything. Then:
+**It must end GREEN.** If the keystone test fails, every lane would build against a lie. Fix it before launching anything. Then:
 
 ```bash
 git add -A && git commit -m "contract: freeze" && git push
@@ -28,12 +27,14 @@ git add -A && git commit -m "contract: freeze" && git push
 ## Setup, on every machine
 
 ```bash
-git clone <repo-url> verity && cd verity
+git clone https://github.com/yogi100x/verity.git && cd verity
 pnpm install
 cp .env.example .env.local     # lanes B and C can leave it empty
 git checkout -b lane/<a|b|c>
 claude
 ```
+
+Only the orchestrator runs `bootstrap.sh` — once, on `main`, before any lane clones.
 
 ---
 

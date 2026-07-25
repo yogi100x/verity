@@ -25,19 +25,25 @@ All documents, decisions and accounts — safe under any pre-work rule. No code.
 
 ## Hour 0 — you alone, no agents (30 minutes)
 
-In order. Nothing else starts until the gate passes.
+The contract, migration, fixture and keystone test are **already written and committed**. Hour 0 is now scaffolding and verification, not authoring.
 
-1. `pnpm create next-app` — TypeScript, App Router, Tailwind
-2. `pnpm add zod @anthropic-ai/sdk @supabase/supabase-js @supabase/ssr`
-3. Create `lib/contracts.ts` — copy verbatim from `docs/contract-spec.md` §1
-4. Create `supabase/migrations/0001_init.sql` — copy verbatim from §2, run it
-5. Create `fixtures/margaret.json` — hand-write a full `CaseSnapshot`: four sources, ~30 claims, ~20 facts, the furosemide conflict with three claim ids, three gaps, both artefacts
-6. Add the keystone test from §3
-7. `pnpm test` — **must be green**
-8. Commit to `main`, push, enable branch protection
-9. After the first preview deploys: paste `https://<preview>.vercel.app/api/voice/inbound` into Twilio Console → Phone Numbers → your number → Voice Configuration → "A call comes in" (Webhook, HTTP POST). Two minutes, unblocks Lane E.
+```bash
+git clone https://github.com/yogi100x/verity.git && cd verity
+./scripts/bootstrap.sh
+```
 
-> **Gate: if `pnpm test` is red, do not launch lanes.** Every lane would build against a lie. This is the highest-value 30 minutes of the weekend.
+That scaffolds Next.js, installs the frozen stack, wires Vitest, appends the design tokens, and runs the keystone test.
+
+Then, in order:
+
+1. **`./scripts/db-push.sh`** — applies the schema and RLS
+2. **Enable Anonymous Sign-Ins** in the Supabase dashboard (Authentication → Sign In / Providers). Miss this and Lane A stalls around hour 2 with an error that looks like RLS and isn't.
+3. Fill in `.env.local` — Anthropic key and the two Supabase keys
+4. `git add -A && git commit -m "chore: scaffold" && git push`
+5. **Protect `main`** — GitHub → Settings → Branches. This is what stops an agent editing the contract at 3am.
+6. After the first preview deploys: paste `https://<preview>.vercel.app/api/voice/inbound` into Twilio Console → Phone Numbers → your number → Voice Configuration → "A call comes in" (Webhook, HTTP POST). Two minutes, unblocks Lane E.
+
+> **Gate: if `bootstrap.sh` ends RED, do not launch lanes.** Every lane would build against a lie. This is the highest-value 20 minutes of the weekend.
 
 ---
 

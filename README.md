@@ -58,19 +58,47 @@ demo/
   design-showcase.html    open in a browser
   documents/              Margaret's synthetic dataset
 
+scripts/
+  bootstrap.sh            hour 0, one command
+  db-push.sh              apply schema + RLS
+  verify.sh               pre-PR check
+
 research/                 the four decision documents behind all of it
 ```
 
 ---
 
-## Hour 0
+## Hour 0 — one command
 
 ```bash
-pnpm install
-pnpm test          # ← THE GATE. must be green before any lane launches.
+./scripts/bootstrap.sh
 ```
 
-If the keystone test is red, every lane would build against a lie. Fix it first.
+Scaffolds Next.js, installs the frozen stack, wires Vitest, appends the design
+tokens, and runs the keystone test. Idempotent — safe to re-run. It never
+touches `lib/contracts.ts`, `fixtures/`, `docs/` or the README.
+
+**If it ends RED, do not launch lanes.** Every lane would build against a lie.
+
+Then:
+
+```bash
+./scripts/db-push.sh    # schema + RLS. Lanes A and D only.
+```
+
+…and enable **Anonymous Sign-Ins** in the Supabase dashboard. Easiest thing to
+miss; Lane A stalls around hour 2 without it, with an error that looks like an
+RLS problem and is not one.
+
+## Before every PR
+
+```bash
+./scripts/verify.sh
+```
+
+Checks the contract is unmodified, no judgement fields exist, no urgency
+language reached the UI, types and tests pass, and your changes stay inside one
+lane's territory.
 
 ---
 
