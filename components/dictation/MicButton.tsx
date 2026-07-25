@@ -42,12 +42,15 @@ import {
   MIC_STOP_LABEL,
 } from "@/lib/copy/dictation";
 import type { Source } from "@/lib/contracts";
+import type { Mode } from "@/lib/modes";
 import { useDictation } from "./useDictation";
 import type { DictationState } from "./useDictation";
 
 type MicButtonProps = {
   personId: string;
   title?: string;
+  /** Threaded straight through to useDictation — see its doc comment. */
+  mode?: Mode;
   onSaved?: (source: Source) => void;
   variant?: "primary" | "compact";
 };
@@ -81,8 +84,8 @@ function liveTextFor(state: DictationState): string {
   }
 }
 
-export function MicButton({ personId, title, onSaved, variant = "primary" }: MicButtonProps) {
-  const { state, start, stop } = useDictation({ personId, title, onSaved });
+export function MicButton({ personId, title, mode, onSaved, variant = "primary" }: MicButtonProps) {
+  const { state, start, stop } = useDictation({ personId, title, mode, onSaved });
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const buttonVariant = variant === "primary" ? "primary" : "secondary";
   const gapClass = variant === "primary" ? "gap-2.5" : "gap-1.5";

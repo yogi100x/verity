@@ -43,6 +43,31 @@ export type UploadDriver = (file: File, report: (patch: ReportPatch) => void) =>
 
 const STAGE_DELAY_MS = 650;
 
+/**
+ * The named-state copy every driver reports through, in one place so a real
+ * driver (components/upload/liveDriver.ts) reuses the exact same words the
+ * simulation does rather than inventing its own — the honest-states rule
+ * (docs/design.md §6) applies to whichever driver is wired in.
+ */
+export const STAGE_LABELS = {
+  queued: "Queued…",
+  reading: (fileName: string) => `Reading ${fileName}…`,
+  finding: "Finding what it says…",
+  checking: "Checking every quote against the page…",
+  done: (claimCount: number) => `Done — ${claimCount} claims`,
+  /** The honest partial-read label: a real note plus a real count. */
+  partial: (note: string, claimCount: number) =>
+    `${note} ${claimCount} claim${claimCount === 1 ? "" : "s"} found.`,
+  /**
+   * A partial result with nothing else honest to say beyond the count (no
+   * notice text was available to surface) — still named, still true, never
+   * a fabricated explanation.
+   */
+  partialCountOnly: (claimCount: number) =>
+    `${claimCount} claim${claimCount === 1 ? "" : "s"} found.`,
+  failed: "Couldn't process this file — nothing was kept from it.",
+} as const;
+
 export function classifyFile(file: File): FileKind {
   if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return "pdf";
   if (file.type.startsWith("image/") || /\.(jpe?g|png|gif|webp)$/i.test(file.name)) return "image";
@@ -65,13 +90,13 @@ function estimateClaimCount(file: File): number {
 }
 
 export const simulatedUploadDriver: UploadDriver = async (file, report) => {
-  report({ stage: "reading", statusLabel: `Reading ${file.name}…` });
+  report({ stage: "reading", statusLabel: STAGE_LABELS.reading(file.name) });
   await wait(STAGE_DELAY_MS);
 
-  report({ stage: "finding", statusLabel: "Finding what it says…" });
+  report({ stage: "finding", statusLabel: STAGE_LABELS.finding });
   await wait(STAGE_DELAY_MS);
 
-  report({ stage: "checking", statusLabel: "Checking every quote against the page…" });
+  report({ stage: "checking", statusLabel: STAGE_LABELS.checking });
   await wait(STAGE_DELAY_MS);
 
   const claimCount = estimateClaimCount(file);
@@ -81,14 +106,14 @@ export const simulatedUploadDriver: UploadDriver = async (file, report) => {
       "We could read most of this page, but not the handwritten note in the margin.";
     report({
       stage: "partial",
-      statusLabel: `${partialNote} ${claimCount} claim${claimCount === 1 ? "" : "s"} found.`,
+      statusLabel: STAGE_LABELS.partial(partialNote, claimCount),
       claimCount,
       partialNote,
     });
     return;
   }
 
-  report({ stage: "done", statusLabel: `Done — ${claimCount} claims`, claimCount });
+  report({ stage: "done", statusLabel: STAGE_LABELS.done(claimCount), claimCount });
 };
 
 let nextId = 0;
@@ -126,7 +151,7 @@ export function useUploadSimulation(driver: UploadDriver = simulatedUploadDriver
         name: file.name,
         kind: classifyFile(file),
         stage: "queued",
-        statusLabel: "Queued…",
+        statusLabel: STAGE_LABELS.queued,
         claimCount: null,
         partialNote: null,
       }));
@@ -139,7 +164,7 @@ export function useUploadSimulation(driver: UploadDriver = simulatedUploadDriver
         void driverRef.current(file, (patch) => patchItem(item.id, patch)).catch(() => {
           patchItem(item.id, {
             stage: "failed",
-            statusLabel: "Couldn't process this file — nothing was kept from it.",
+            statusLabel: STAGE_LABELS.failed,
           });
         });
       });

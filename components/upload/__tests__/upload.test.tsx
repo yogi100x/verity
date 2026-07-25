@@ -18,7 +18,17 @@ import "@testing-library/jest-dom/vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UploadView } from "@/components/upload/UploadView";
+import { STAGE_LABELS } from "@/components/upload/useUploadSimulation";
 import { DICTATION_PROMPT, MIC_START_LABEL } from "@/lib/copy/dictation";
+
+// Mode-selection tests (bottom of this file) mock the live driver module so
+// they can assert *which* driver UploadView wired up without exercising a
+// real fetch. Every other test in this file never passes `mode`, so this
+// mock is never invoked there — the real simulated driver still runs.
+const createLiveDriverMock = vi.fn();
+vi.mock("@/components/upload/liveDriver", () => ({
+  createLiveDriver: (...args: unknown[]) => createLiveDriverMock(...args),
+}));
 
 // The former default export of app/(app)/upload/page.tsx was a client
 // component and could be rendered directly. It is now an async Server
@@ -113,5 +123,72 @@ describe("UploadPage", () => {
 
     expect(screen.getByText(/1 document added,/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "See the timeline" })).toBeInTheDocument();
+  });
+});
+
+describe("UploadView mode selection", () => {
+  beforeEach(() => {
+    createLiveDriverMock.mockReset();
+  });
+
+  it("wires the live driver, not the simulation, when mode is 'live'", async () => {
+    createLiveDriverMock.mockReturnValue(
+      (_file: File, report: (patch: { stage: string; statusLabel: string; claimCount: number }) => void) => {
+        report({ stage: "done", statusLabel: "LIVE DRIVER RAN", claimCount: 5 });
+        return Promise.resolve();
+      },
+    );
+
+    render(<UploadView personId={TEST_PERSON_ID} mode="live" />);
+    drop(new File(["x"], "discharge.pdf", { type: "application/pdf" }));
+
+    expect(createLiveDriverMock).toHaveBeenCalledWith(TEST_PERSON_ID);
+    // The mock driver reports synchronously (no awaited timer), so the
+    // patch lands within the same act() as the drop — no need to advance
+    // fake timers or wait for it.
+    expect(screen.getByText("LIVE DRIVER RAN")).toBeInTheDocument();
+    // The simulation's own first label never appears — proof this file's
+    // driver ran instead of the timer-based simulation.
+    expect(screen.queryByText(/^Reading discharge\.pdf/)).toBeNull();
+  });
+
+  it("uses the untouched simulation driver when mode is 'fixtures'", async () => {
+    render(<UploadView personId={TEST_PERSON_ID} mode="fixtures" />);
+    drop(new File(["x"], "discharge.pdf", { type: "application/pdf" }));
+
+    expect(createLiveDriverMock).not.toHaveBeenCalled();
+    expect(screen.getByText(/Reading discharge\.pdf/)).toBeInTheDocument();
+
+    await tick(STAGE_DELAY_MS * 3);
+  });
+
+  it("uses the untouched simulation driver when mode is undefined", async () => {
+    render(<UploadView personId={TEST_PERSON_ID} mode={undefined} />);
+    drop(new File(["x"], "discharge.pdf", { type: "application/pdf" }));
+
+    expect(createLiveDriverMock).not.toHaveBeenCalled();
+    expect(screen.getByText(/Reading discharge\.pdf/)).toBeInTheDocument();
+
+    await tick(STAGE_DELAY_MS * 3);
+  });
+
+  it("surfaces a failed row's server-provided reason (partialNote), not just the generic failed label", async () => {
+    // The live driver carries a 413/415 body (or a persist notice) in
+    // `partialNote`; the failed `statusLabel` stays the reused honest line.
+    // Both must reach the screen, or the only text explaining *why* it failed
+    // is invisible.
+    const serverReason = "discharge.pdf is over the 4MB upload limit.";
+    createLiveDriverMock.mockReturnValue(
+      (_file: File, report: (patch: { stage: string; statusLabel: string; partialNote: string }) => void) => {
+        report({ stage: "failed", statusLabel: STAGE_LABELS.failed, partialNote: serverReason });
+        return Promise.resolve();
+      },
+    );
+
+    render(<UploadView personId={TEST_PERSON_ID} mode="live" />);
+    drop(new File(["x"], "discharge.pdf", { type: "application/pdf" }));
+
+    expect(screen.getByText(STAGE_LABELS.failed)).toBeInTheDocument();
+    expect(screen.getByText(serverReason)).toBeInTheDocument();
   });
 });

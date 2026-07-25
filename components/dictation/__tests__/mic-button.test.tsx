@@ -169,6 +169,32 @@ describe("MicButton", () => {
     }
   });
 
+  it("threads an explicit mode onto the upload URL as ?mode=<mode>", async () => {
+    const { grantMic } = installSupportedBrowser();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => SOURCE_RESPONSE,
+    });
+
+    render(<MicButton personId={PERSON_ID} mode="live" />);
+
+    fireEvent.click(screen.getByRole("button", { name: MIC_START_LABEL }));
+    await grantMic();
+
+    await waitFor(() => {
+      expect(screen.getAllByText(DICTATION_STATES.recording).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: MIC_STOP_LABEL }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/voice/upload?mode=live");
+  });
+
   it("releases the microphone when unmounted mid-recording, so the browser indicator never stays lit", async () => {
     const { grantMic } = installSupportedBrowser();
 

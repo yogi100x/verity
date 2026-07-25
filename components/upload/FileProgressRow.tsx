@@ -32,6 +32,19 @@ export function FileProgressRow({ item }: { item: UploadItem }) {
         <p className="truncate text-body font-medium text-ink">{item.name}</p>
         <p className="mt-1 text-body-s text-ink-secondary">{item.statusLabel}</p>
 
+        {/*
+         * A failed row's `statusLabel` is the one reused, honest failure line;
+         * any server-provided reason (a 413/415 body, a persist notice) lives
+         * in `partialNote`, which would otherwise never reach the screen. Show
+         * it as a muted secondary line — the copy is the server's own
+         * user-safe string, never invented here. Only on `failed`: on
+         * `partial`, the note is already inside `statusLabel`, so rendering it
+         * again would duplicate the text (and double-match the partial tests).
+         */}
+        {item.stage === "failed" && item.partialNote && (
+          <p className="mt-1 text-body-s text-ink-secondary">{item.partialNote}</p>
+        )}
+
         {item.stage === "partial" && (
           <div className="mt-3 flex items-center gap-3">
             <span
