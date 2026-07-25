@@ -184,8 +184,13 @@ describe('POST /api/extract', () => {
     expect(body.error).toContain('PDF');
   });
 
-  it('returns 413 for a payload over 5MB', async () => {
-    const oversized = new Uint8Array(5 * 1024 * 1024 + 1);
+  it('MAX_UPLOAD_BYTES stays under Vercel’s 4.5MB request-body ceiling — a bigger limit means the platform 413s before our route runs', async () => {
+    const { MAX_UPLOAD_BYTES } = await import('@/lib/ai/documents');
+    expect(MAX_UPLOAD_BYTES).toBeLessThan(4.5 * 1024 * 1024);
+  });
+
+  it('returns 413 for a payload over the byte limit', async () => {
+    const oversized = new Uint8Array(4 * 1024 * 1024 + 1);
     // PNG magic bytes so it would otherwise classify fine — the size check
     // must fire before classification.
     oversized[0] = 0x89;
@@ -200,7 +205,7 @@ describe('POST /api/extract', () => {
     expect(res.status).toBe(413);
     const body = await res.json();
     expect(typeof body.error).toBe('string');
-    expect(body.error).toContain('5');
+    expect(body.error).toContain('4MB');
   });
 
   it('never contains a banned judgement key in fixtures-mode JSON output', async () => {

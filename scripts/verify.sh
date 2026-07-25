@@ -90,8 +90,11 @@ bold "Territory"
 CHANGED=$(git diff --name-only HEAD 2>/dev/null || true)
 count() { echo "$CHANGED" | grep -cE "$1" || true; }
 # E is matched before A on purpose: app/api/voice/** belongs to E, the rest of app/api/** to A.
-E=$(count '^(lib/voice/|app/api/voice/)')
-A=$(echo "$CHANGED" | grep -E '^(lib/ai/|app/api/)' | grep -vcE '^app/api/voice/' || true)
+# Exception (board ruling, 25 Jul): app/api/voice/upload/** is Lane A's while Lane E is dormant.
+E=$(echo "$CHANGED" | grep -E '^(lib/voice/|app/api/voice/)' | grep -cvE '^app/api/voice/upload/' || true)
+A_REST=$(echo "$CHANGED" | grep -E '^(lib/ai/|app/api/)' | grep -vcE '^app/api/voice/' || true)
+A_UPLOAD=$(count '^app/api/voice/upload/')
+A=$((A_REST + A_UPLOAD))
 B=$(count '^(app/\(app\)/|app/page\.tsx|app/layout\.tsx|app/globals\.css|app/favicon|components/|public/manifest\.json|public/icons/)')
 C=$(count '^lib/(safety|detectors|copy)/')
 D=$(count '^(demo/|scripts/|\.github/|vercel\.json|app/demo/|public/sw\.js|lib/modes/)')

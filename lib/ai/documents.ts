@@ -23,7 +23,10 @@
 
 import type Anthropic from '@anthropic-ai/sdk';
 
-export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+/** 4MB — deliberately under Vercel's 4.5MB request-body ceiling, so our own
+ *  413 (with its human-readable message) always fires before the platform's
+ *  opaque edge rejection can. */
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 export type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 

@@ -256,7 +256,11 @@ describe('POST /api/voice/upload', () => {
     expect(typeof body.error).toBe('string');
   });
 
-  it('413 for a recording over 25MB', async () => {
+  it('MAX_AUDIO_BYTES stays under Vercel’s 4.5MB request-body ceiling — a bigger limit means the platform 413s before our route runs', () => {
+    expect(MAX_AUDIO_BYTES).toBeLessThan(4.5 * 1024 * 1024);
+  });
+
+  it('413 for a recording over the byte limit', async () => {
     resolveMode.mockReturnValue('fixtures');
     const oversized = new Uint8Array(MAX_AUDIO_BYTES + 1);
     const res = await POST(
@@ -268,7 +272,7 @@ describe('POST /api/voice/upload', () => {
     expect(res.status).toBe(413);
     const body = await res.json();
     expect(typeof body.error).toBe('string');
-    expect(body.error).toContain('25');
+    expect(body.error).toContain('4MB');
     expect(createClient).not.toHaveBeenCalled();
   });
 

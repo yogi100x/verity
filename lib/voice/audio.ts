@@ -11,7 +11,11 @@
  * transcript / zero confidence pair for the inserted Source row.
  */
 
-export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+/** 4MB — deliberately under Vercel's 4.5MB request-body ceiling. A bigger
+ *  limit here is a stage trap: the platform rejects the body at the edge
+ *  before this route ever runs, so our carefully-worded 413 could never
+ *  fire. 4MB is ~20 minutes of Opus voice; the demo clip is a minute. */
+export const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 
 /** Browser MediaRecorder mime type -> file extension used in the storage
  *  path (`voice/<uuid>.<ext>`). Keys are base mime types (no codec params —
