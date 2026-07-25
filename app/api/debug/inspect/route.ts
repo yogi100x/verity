@@ -13,9 +13,15 @@
 
 import { resolveMode, anthropicFor, MissingCredentialsError, type Mode } from '@/lib/ai/modes';
 import { extractAll, type ExtractionReport } from '@/lib/ai/extract';
-import { renderInspectPage, escapeHtml, type InspectConflictView } from '@/lib/ai/inspect-html';
-import { reconcile, supersededClaimIdsFromFacts } from '@/lib/ai/reconcile';
-import type { Claim } from '@/lib/contracts';
+import {
+  renderInspectPage,
+  escapeHtml,
+  type InspectConflictView,
+  type InspectFactView,
+} from '@/lib/ai/inspect-html';
+import { reconcile } from '@/lib/ai/reconcile';
+import { periodDecisionFor } from '@/lib/ai/facts';
+import type { Claim, Fact, Source } from '@/lib/contracts';
 import { CaseSnapshot } from '@/lib/contracts';
 import fixtureRaw from '@/fixtures/margaret.json';
 
@@ -57,55 +63,56 @@ function problemPage(title: string, message: string): string {
 const fixture = CaseSnapshot.parse(fixtureRaw);
 
 /**
- * Build the conflict views for the page from a set of extraction reports.
+ * Reconciliation output the page needs: the conflict views and the fact
+ * (timeline) views, built from a set of extraction reports.
  *
  * Gathers every kept (verified) claim across all reports, joins claim ids
  * back to their claims and source titles, and calls `reconcile`. A dropped
  * claim never reaches this function — it is not present in `report.kept` —
- * so a conflict built here can never display a claim that failed
+ * so neither view built here can ever display a claim that failed
  * verification.
  *
  * Every mode is treated identically: reconciliation always runs over the kept
- * claims of the reports it was handed, and supersession always comes from the
- * only Fact registry that exists today. There is no fixtures special case here
- * — there was one, and it was in the wrong layer: it made this route know about
- * `fixtures/margaret.json` in order to work around `extractFromFixtures`
- * regenerating claim ids. That is fixed at the source now (see
- * `extractFromFixtures`), so `report.kept` ids line up with the ids
- * `fixture.facts` reference and this function needs no branch.
+ * claims of the reports it was handed. Supersession is now DERIVED, not read
+ * from a fixture: `sourcesById` is built from the reports' own source
+ * metadata (id, kind, title) and handed to `reconcile`, which runs
+ * `buildFacts` + `applySupersession` (`lib/ai/facts.ts`) per claim group
+ * itself. This is what turns the four live furosemide claims into the
+ * documented THREE-claim conflict on a live extraction, not only on the
+ * committed fixture: the March cardiology letter classifies as an
+ * `instruction` (`lib/ai/sources.ts`), the June discharge summary is a later
+ * `instruction` for the same subject, so `buildFacts` opens a new period at
+ * the discharge summary and `applySupersession` closes the March period
+ * against it — no read of `fixture.facts` involved.
  *
- * Supersession read from `fixture.facts` is what turns the four live furosemide
- * claims into the documented THREE-claim conflict: the March cardiology claim
- * supports a fact with `valid_to` set (superseded by the June discharge fact),
- * so `supersededClaimIdsFromFacts` picks it up and `reconcile` excludes it as
- * no longer live.
- *
- * The honest limitation: this is the ONLY Fact registry in the codebase. The
- * supersession pass itself is stretch S6 and is not built, and there is no
- * persisted `facts` table read here yet, so a genuine live extraction of
- * unrelated documents finds no matching ids and treats every verified claim in
- * a group as live — a four-claim conflict rather than three. That is a
- * dependency on unbuilt work, stated rather than hidden, and it is uniform
- * across modes rather than branched on.
+ * There is no fixtures special case here — there was one, and it was in the
+ * wrong layer: it made this route know about `fixtures/margaret.json` in
+ * order to work around `extractFromFixtures` regenerating claim ids. That is
+ * fixed at the source now (see `extractFromFixtures`), so `report.kept` ids
+ * are stable and this function needs no branch.
  */
-function conflictViewsFor(reports: readonly ExtractionReport[]): InspectConflictView[] {
-  const titleBySourceId = new Map<string, string>();
+function reconcileViewsFor(
+  reports: readonly ExtractionReport[],
+): { conflicts: InspectConflictView[]; facts: InspectFactView[] } {
+  const sourcesById = new Map<string, Pick<Source, 'kind' | 'title'>>();
   for (const report of reports) {
-    titleBySourceId.set(report.source.id, report.source.title);
+    sourcesById.set(report.source.id, { kind: report.source.kind, title: report.source.title });
   }
 
   // `kept` carries verified claims only — a claim that failed the substring
   // check is in `dropped` and cannot be reached from here — so no fabricated
-  // quote can enter the conflicts section by this path.
+  // quote can enter either view by this path.
   const allKept: Claim[] = reports.flatMap((r) => r.kept);
 
-  const { conflicts } = reconcile(allKept, fixture.person.id, {
-    supersededClaimIds: supersededClaimIdsFromFacts(fixture.facts),
-  });
+  // `fixture.person.id` is a stand-in: no person/source registry is
+  // persisted anywhere in this lane yet, so the fixture's own person id is
+  // the only one available regardless of mode. Replace this once sources and
+  // persons are actually stored (out of scope for S6).
+  const { conflicts, facts } = reconcile(allKept, fixture.person.id, { sourcesById });
 
   const claimById = new Map(allKept.map((c) => [c.id, c] as const));
 
-  return conflicts.map((conflict) => ({
+  const conflictViews: InspectConflictView[] = conflicts.map((conflict) => ({
     id: conflict.id,
     ontology_key: conflict.ontology_key,
     subject: conflict.subject,
@@ -118,10 +125,45 @@ function conflictViewsFor(reports: readonly ExtractionReport[]): InspectConflict
         id: claim.id,
         value: claim.value,
         quote: claim.quote,
-        source_title: titleBySourceId.get(claim.source_id) ?? claim.source_id,
+        source_title: sourcesById.get(claim.source_id)?.title ?? claim.source_id,
         asserted_at: claim.asserted_at,
       })),
   }));
+
+  const factViews: InspectFactView[] = facts.map((fact: Fact) => ({
+    id: fact.id,
+    ontology_key: fact.ontology_key,
+    subject: fact.subject,
+    canonical_value: fact.canonical_value,
+    status: fact.status,
+    valid_from: fact.valid_from,
+    valid_to: fact.valid_to,
+    superseded: fact.superseded_by !== null,
+    supporting: fact.supporting_claim_ids
+      .map((claimId) => claimById.get(claimId))
+      .filter((claim): claim is Claim => claim !== undefined)
+      .map((claim) => {
+        // `periodDecisionFor`, not `classifySource`: the page must show the
+        // decision the pipeline ACTUALLY made about this claim, which
+        // includes refusing an instruction a validity period because its date
+        // cannot anchor one. Rendering the bare source role instead would
+        // label such a claim "instruction" with no hint that it opened no
+        // period — the silent downgrade `lib/ai/facts.ts` exists to avoid.
+        const source = sourcesById.get(claim.source_id);
+        const decision =
+          source === undefined
+            ? { role: 'observation' as const, reason: 'source metadata unavailable' }
+            : periodDecisionFor(claim, source);
+        return {
+          quote: claim.quote,
+          source_title: source?.title ?? claim.source_id,
+          role: decision.role,
+          role_reason: decision.reason,
+        };
+      }),
+  }));
+
+  return { conflicts: conflictViews, facts: factViews };
 }
 
 async function reportsFor(mode: Mode): Promise<{ reports: ExtractionReport[]; note: string | null }> {
@@ -155,8 +197,8 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const { reports, note } = await reportsFor(mode);
-    const conflicts = conflictViewsFor(reports);
-    return html(renderInspectPage(reports, note, conflicts));
+    const { conflicts, facts } = reconcileViewsFor(reports);
+    return html(renderInspectPage(reports, note, conflicts, facts));
   } catch (err) {
     if (err instanceof MissingCredentialsError) {
       return html(
