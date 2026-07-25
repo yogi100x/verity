@@ -496,7 +496,13 @@ describe('GET /api/sources/[id]/raw', () => {
     expect(body).not.toContain('"devDependencies"');
   });
 
-  it('fixture count: exactly one source resolves exactly, the rest via fallback, none missing', () => {
+  // Deliberate drift alarm, seed-plan style: pinned counts force a human
+  // decision whenever fixture sources or demo assets change. As of 25 Jul:
+  // 2 exact (05 care log, 06 checklist letter — both .md paths exist),
+  // 4 fallback (01–04 point at rendered PDFs/JPG not yet produced — the
+  // orchestrator's asset task). When those assets land, exact becomes 6
+  // and fallback 0: update this pin then, and nothing else.
+  it('fixture count: 2 exact, 4 fallback, none missing (pinned — see comment)', () => {
     let exact = 0;
     let fallback = 0;
     let missing = 0;
@@ -507,8 +513,8 @@ describe('GET /api/sources/[id]/raw', () => {
       else missing += 1;
     }
     expect(missing).toBe(0);
-    expect(exact).toBe(1);
-    expect(fallback).toBe(fixture.sources.length - 1);
+    expect(exact).toBe(2);
+    expect(fallback).toBe(fixture.sources.length - 2);
   });
 });
 
