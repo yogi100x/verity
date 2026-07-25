@@ -11,13 +11,23 @@
  * Source is returned with a notice explaining nothing was stored. Only
  * `live` mode uploads to Supabase Storage and inserts a real row.
  *
- * Validation order is fixed: field presence -> mime -> size -> mode branch.
- * That order is asserted by the route tests (mime/size checks must fire
- * before any Supabase call, even in live mode).
+ * Validation order is fixed: content-length precheck -> field presence ->
+ * mime -> size -> byte sniff -> mode branch. That order is asserted by the
+ * route tests (mime/size/sniff checks must fire before any Supabase call,
+ * even in live mode).
+ *
+ * The byte sniff (lib/ai/audio.ts, ported from PR #19 per the orchestrator's
+ * ruling) is what the MIME allowlist alone cannot be: proof about the BYTES.
+ * MediaRecorder cannot lie about its own container, but nothing forces the
+ * caller to be MediaRecorder — and HEIC/AVIF photos share MP4's `ftyp`
+ * container, so before this check any iPhone photo labelled audio/mp4 was
+ * storable as a "recording". The claim (MIME) still picks the storage
+ * extension; the bytes decide admission.
  */
 
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { detectAudioMediaType } from '@/lib/ai/audio';
 import { resolveMode } from '@/lib/modes';
 import { Source } from '@/lib/contracts';
 import {
@@ -45,6 +55,18 @@ function errorResponse(status: number, error: string): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // Content-Length precheck — REJECT-ONLY. A header over the limit 413s
+  // before the body is buffered; a header that is small, absent or lying
+  // proves nothing and the post-buffer byte count below remains the only
+  // authority for acceptance.
+  const declaredLength = Number(request.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && exceedsAudioSizeLimit(declaredLength)) {
+    return errorResponse(
+      413,
+      `Recording is over the ${MAX_AUDIO_BYTES / (1024 * 1024)}MB upload limit.`,
+    );
+  }
+
   let form: FormData;
   try {
     form = await request.formData();
@@ -101,6 +123,18 @@ export async function POST(request: Request): Promise<Response> {
     return errorResponse(
       413,
       `Recording is over the ${MAX_AUDIO_BYTES / (1024 * 1024)}MB upload limit.`,
+    );
+  }
+
+  // The bytes must BE a recognised audio container, whatever the client
+  // claimed. This is the gate that keeps a HEIC photo labelled audio/mp4, a
+  // 4-byte magic-prefix stub, or an FF-Ex sync near-miss out of the bucket.
+  if (detectAudioMediaType(bytes) === null) {
+    return errorResponse(
+      415,
+      'The uploaded bytes are not a recognised audio recording (WebM, Ogg, ' +
+        'MP4/M4A, MP3, WAV). The file content is checked, not its name or ' +
+        'declared type.',
     );
   }
 

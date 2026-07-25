@@ -77,6 +77,19 @@ function audioField(bytes: Uint8Array<ArrayBuffer>, contentType = 'audio/webm;co
   return { name: 'audio', filename: 'note.webm', contentType, data: bytes };
 }
 
+/**
+ * Genuine WebM magic bytes (EBML header), padded past MIN_SNIFF_BYTES. The
+ * route now sniffs bytes (lib/ai/audio.ts, ported from PR #19), so the
+ * arbitrary [9,9,9]-style payloads these tests originally used would be
+ * refused as not-audio before reaching the paths under test. The assertions
+ * are unchanged; only the payload became a real container prefix.
+ */
+function webmBytes(length = 16): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(Math.max(length, 12));
+  out.set([0x1a, 0x45, 0xdf, 0xa3], 0);
+  return out;
+}
+
 const OK_ROW = {
   id: '22222222-2222-2222-2222-222222222222',
   person_id: PERSON_ID,
@@ -134,7 +147,7 @@ describe('POST /api/voice/upload', () => {
     resolveMode.mockReturnValue('fixtures');
     const res = await POST(
       multipartRequest('http://localhost/api/voice/upload', [
-        audioField(new Uint8Array([1, 2, 3, 4])),
+        audioField(webmBytes()),
         { name: 'person_id', data: PERSON_ID },
       ]),
     );
@@ -157,7 +170,7 @@ describe('POST /api/voice/upload', () => {
     resolveMode.mockReturnValue('replay');
     const res = await POST(
       multipartRequest('http://localhost/api/voice/upload', [
-        audioField(new Uint8Array([1, 2, 3, 4])),
+        audioField(webmBytes()),
         { name: 'person_id', data: PERSON_ID },
       ]),
     );
@@ -196,7 +209,7 @@ describe('POST /api/voice/upload', () => {
 
     const res = await POST(
       multipartRequest('http://localhost/api/voice/upload', [
-        audioField(new Uint8Array([9, 9, 9]), 'audio/webm'),
+        audioField(webmBytes(), 'audio/webm'),
         { name: 'person_id', data: PERSON_ID },
       ]),
     );
@@ -333,7 +346,7 @@ describe('POST /api/voice/upload', () => {
       multipartRequest('http://localhost/api/voice/upload', [
         // MediaRecorder reports the codec parameter; the bucket allow-list is
         // exact-match on base mimes, so the route must strip it before upload.
-        audioField(new Uint8Array([9, 9, 9]), 'audio/webm;codecs=opus'),
+        audioField(webmBytes(), 'audio/webm;codecs=opus'),
         { name: 'person_id', data: PERSON_ID },
       ]),
     );
@@ -354,7 +367,7 @@ describe('POST /api/voice/upload', () => {
 
     const res = await POST(
       multipartRequest('http://localhost/api/voice/upload', [
-        audioField(new Uint8Array([9, 9, 9]), 'audio/webm'),
+        audioField(webmBytes(), 'audio/webm'),
         { name: 'person_id', data: PERSON_ID },
       ]),
     );
@@ -373,7 +386,7 @@ describe('POST /api/voice/upload', () => {
 
     const res = await POST(
       multipartRequest('http://localhost/api/voice/upload', [
-        audioField(new Uint8Array([9, 9, 9]), 'audio/webm'),
+        audioField(webmBytes(), 'audio/webm'),
         { name: 'person_id', data: PERSON_ID },
       ]),
     );
@@ -404,7 +417,7 @@ describe('POST /api/voice/upload', () => {
 
     const res = await POST(
       multipartRequest('http://localhost/api/voice/upload', [
-        audioField(new Uint8Array([9, 9, 9]), 'audio/webm'),
+        audioField(webmBytes(), 'audio/webm'),
         { name: 'person_id', data: PERSON_ID },
       ]),
     );
