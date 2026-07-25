@@ -92,7 +92,7 @@ export interface SlotOmission {
  */
 function isVerifiedBacked(
   fact: Fact,
-  claimsById: ReadonlyMap<string, Pick<Claim, 'verified_substring'>>,
+  claimsById: ReadonlyMap<string, BackingClaim>,
 ): boolean {
   for (const claimId of fact.supporting_claim_ids) {
     const claim = claimsById.get(claimId);
@@ -111,7 +111,7 @@ function isVerifiedBacked(
 function factsForSlot(
   slot: Slot,
   facts: readonly Fact[],
-  claimsById: ReadonlyMap<string, Pick<Claim, 'verified_substring'>>,
+  claimsById: ReadonlyMap<string, BackingClaim>,
 ): Fact[] {
   const live = liveFacts(facts);
   return live.filter(
@@ -132,6 +132,41 @@ function composeText(facts: readonly Fact[]): string {
 }
 
 /**
+ * The verbatim quotes standing behind these facts.
+ *
+ * `filterOutput` rejects a generated string that names a clinical condition
+ * UNLESS that condition appears verbatim in one of the cited spans it is
+ * given. So the spans are load-bearing in both directions, and passing an
+ * empty list is not the safe default it looks like:
+ *
+ *   - Pass the real quotes, and a diagnosis that a source document actually
+ *     states survives, cited.
+ *   - Pass nothing, and every condition name reads as uncited. Margaret's
+ *     heart failure diagnosis — quoted word for word from her discharge
+ *     summary — is then suppressed, and the GP brief silently loses the
+ *     reason she was in hospital. That is evidence loss dressed up as
+ *     caution, which is the failure this product exists to prevent.
+ *
+ * Only verified claims contribute, so an unverified quote can never launder
+ * a condition name into an artefact.
+ */
+function citedSpansFor(
+  facts: readonly Fact[],
+  claimsById: ReadonlyMap<string, BackingClaim>,
+): string[] {
+  const spans: string[] = [];
+  for (const fact of facts) {
+    for (const claimId of fact.supporting_claim_ids) {
+      const claim = claimsById.get(claimId);
+      if (claim !== undefined && claim.verified_substring === true) {
+        spans.push(claim.quote);
+      }
+    }
+  }
+  return spans;
+}
+
+/**
  * A level word among these values that IS a valid `ChcLevel` for `domain`,
  * per the frozen `CHC_DOMAIN_LEVELS` (never a ceiling — see
  * `lib/ai/templates.ts`). Trimmed and lowercased before parsing, matching
@@ -146,7 +181,7 @@ function isValidChcLevelValue(domain: ChcDomain, value: string): boolean {
 export function resolveSlot(
   slot: Slot,
   facts: readonly Fact[],
-  claimsById: ReadonlyMap<string, Pick<Claim, 'verified_substring'>>,
+  claimsById: ReadonlyMap<string, BackingClaim>,
 ): SlotResolution {
   const matched = factsForSlot(slot, facts, claimsById);
 
@@ -166,7 +201,9 @@ export function resolveSlot(
   // composed text trips the filter is treated exactly as if nothing had
   // matched — over-blocking is the documented, deliberate design of
   // `filterOutput` itself.
-  const filterOk = matched.length === 0 || filterOutput(composeText(matched), []).ok;
+  const filterOk =
+    matched.length === 0 ||
+    filterOutput(composeText(matched), citedSpansFor(matched, claimsById)).ok;
 
   if (matched.length > 0 && levelOk && filterOk) {
     return {
@@ -200,11 +237,27 @@ export function resolveSlot(
   };
 }
 
+/**
+ * What slot resolution needs to know about a claim: whether it survived the
+ * substring check, and the quote itself — the quote is what tells
+ * `filterOutput` that a condition named in composed text is genuinely cited.
+ */
+export type BackingClaim = Pick<Claim, 'verified_substring' | 'quote'>;
+
 export interface BuildArtifactInput {
   readonly template: ArtifactTemplate;
   readonly facts: readonly Fact[];
-  readonly claimsById: ReadonlyMap<string, Pick<Claim, 'verified_substring'>>;
+  readonly claimsById: ReadonlyMap<string, BackingClaim>;
   readonly personId: string;
+  /**
+   * When this artefact was assembled, as an ISO string supplied by the caller.
+   *
+   * Required, and deliberately not read from the wall clock here: this module
+   * is pure, and `new Date()` inside it would mean two builds of identical
+   * evidence were not comparable — which is exactly what the determinism
+   * tests assert. The caller owns the clock.
+   */
+  readonly createdAt: string;
   /** The person this pack is about — required to fill `cover.subject` (and,
    *  as the opt-in signal for the whole structural front matter, `cover.scope`
    *  too). Absent by default: a caller that does not supply it gets the prior
@@ -276,15 +329,19 @@ export interface BuildArtifactResult {
  * filtering the live template, and a structural slot with no entry here (or
  * whose resolver returns `null`) stays omitted, honestly, exactly as before.
  *
- * `cover.scope` needs no input of its own — `PERSISTENT_BANNER` is a fixed
- * constant — but is still gated behind `person` below, deliberately more
- * conservative than the text itself requires: this pack's front matter
- * renders as a whole or not at all, so a reviewer is never shown a scope
- * statement sitting above no named subject.
+ * `cover.scope` is NOT gated behind anything. It needs no input —
+ * `PERSISTENT_BANNER` is a fixed constant — and it is the statement that this
+ * pack organises evidence rather than assessing anyone. A pack missing the
+ * subject's name is incomplete; a pack missing its scope statement is
+ * misleading about what it is, which is worse. So the disclaimer renders
+ * whenever the template asks for it, even when nothing else on the cover can
+ * be filled. (An earlier version gated it alongside `cover.subject` so that a
+ * caller supplying neither stayed byte-identical — that traded a safety
+ * statement for test convenience.)
  */
 const STRUCTURAL_COPY_SOURCES: Readonly<Record<string, (input: BuildArtifactInput) => string | null>> = {
   'cover.subject': (input) => input.person?.display_name ?? null,
-  'cover.scope': (input) => (input.person === undefined ? null : PERSISTENT_BANNER),
+  'cover.scope': () => PERSISTENT_BANNER,
   'method.provenance': (input) =>
     input.person === undefined || input.assembledOn === undefined
       ? null
@@ -388,7 +445,7 @@ export function buildArtifact(input: BuildArtifactInput): BuildArtifactResult {
       template_key: template.key,
       assertions,
       user_verified: false,
-      created_at: new Date().toISOString(),
+      created_at: input.createdAt,
     },
     omissions,
     structuralAssertions,

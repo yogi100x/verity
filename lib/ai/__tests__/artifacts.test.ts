@@ -17,8 +17,13 @@ import {
 } from '@/lib/contracts';
 import fixtureRaw from '@/fixtures/margaret.json';
 import { templateByKey, slotsOf } from '@/lib/ai/templates';
-import { resolveSlot, buildArtifact, type BuildArtifactInput } from '@/lib/ai/artifacts';
+import { resolveSlot, buildArtifact, type BuildArtifactInput, type BackingClaim } from '@/lib/ai/artifacts';
 import { FRAMEWORK_CITATIONS } from '@/lib/detectors/well_managed';
+
+/** Fixed, deterministic build clock for every test in this file — the
+ *  caller (never `lib/ai/**`) owns the clock now that `createdAt` is a
+ *  required `BuildArtifactInput` field. */
+const CREATED_AT = '2026-07-25T00:00:00.000Z';
 
 const JUDGEMENT_KEY_RE = /severity|urgency|priority|rank|risk|score/i;
 const JUDGEMENT_LANGUAGE_RE =
@@ -42,10 +47,10 @@ function collectKeys(value: unknown, keys: Set<string>): void {
 
 const fixture = CaseSnapshot.parse(fixtureRaw);
 
-function claimsById(): ReadonlyMap<string, Pick<Claim, 'verified_substring'>> {
-  const map = new Map<string, Pick<Claim, 'verified_substring'>>();
+function claimsById(): ReadonlyMap<string, BackingClaim> {
+  const map = new Map<string, BackingClaim>();
   for (const claim of fixture.claims) {
-    map.set(claim.id, { verified_substring: claim.verified_substring });
+    map.set(claim.id, { verified_substring: claim.verified_substring, quote: claim.quote });
   }
   return map;
 }
@@ -94,8 +99,8 @@ describe('resolveSlot — S6: a superseded fact must never fill a slot', () => {
     if (slot === undefined) throw new Error('mobility.evidence slot not found');
 
     const verifiedClaimId = randomUUID();
-    const claims = new Map<string, Pick<Claim, 'verified_substring'>>([
-      [verifiedClaimId, { verified_substring: true }],
+    const claims = new Map<string, BackingClaim>([
+      [verifiedClaimId, { verified_substring: true, quote: 'Unsteady on stairs, uses a handrail.' }],
     ]);
 
     const successorId = randomUUID();
@@ -128,8 +133,8 @@ describe('resolveSlot — an unverified-only claim does not back a fact', () => 
     if (slot === undefined) throw new Error('mobility.evidence slot not found');
 
     const unverifiedClaimId = randomUUID();
-    const claims = new Map<string, Pick<Claim, 'verified_substring'>>([
-      [unverifiedClaimId, { verified_substring: false }],
+    const claims = new Map<string, BackingClaim>([
+      [unverifiedClaimId, { verified_substring: false, quote: 'placeholder' }],
     ]);
 
     const fact = makeFact({
@@ -173,8 +178,8 @@ describe('resolveSlot — a live fact and a superseded fact matching the same sl
     if (slot === undefined) throw new Error('mobility.evidence slot not found');
 
     const verifiedClaimId = randomUUID();
-    const claims = new Map<string, Pick<Claim, 'verified_substring'>>([
-      [verifiedClaimId, { verified_substring: true }],
+    const claims = new Map<string, BackingClaim>([
+      [verifiedClaimId, { verified_substring: true, quote: 'placeholder' }],
     ]);
 
     const liveFact = makeFact({
@@ -205,6 +210,7 @@ describe('resolveSlot — a live fact and a superseded fact matching the same sl
       facts: [supersededFact, liveFact],
       claimsById: claims,
       personId: fixture.person.id,
+      createdAt: CREATED_AT,
     });
     const assertion = artifact.assertions.find((a) => a.slot_key === 'mobility.evidence');
     expect(assertion?.text).toContain('Now uses a frame indoors');
@@ -241,6 +247,57 @@ describe('resolveSlot — drug_therapies.framework_note is the one exempt slot',
   });
 });
 
+describe('resolveSlot — citedSpansFor: a condition name survives only when its own backing quote contains it', () => {
+  // `citedSpansFor` now supplies the real quotes behind a slot's matched
+  // facts (see the header comment on `lib/ai/artifacts.ts`). Passing `[]`
+  // used to make every condition name read as uncited — including
+  // Margaret's own heart-failure diagnosis, quoted word for word from her
+  // discharge summary. These two cases prove both directions: a condition
+  // genuinely cited by its supporting claim's quote survives `filterOutput`
+  // and fills the slot; the same condition name backed by a claim whose
+  // quote does NOT contain it still falls through, exactly as before.
+  const template = templateByKey('chc_dst_pack_v1');
+  const slot = slotsOf(template)
+    .map((s) => s.slot)
+    .find((s) => s.key === 'other_significant.evidence');
+  if (slot === undefined) throw new Error('other_significant.evidence slot not found');
+
+  it('a condition name backed by a verified claim whose quote contains it survives, cited', () => {
+    const claimId = randomUUID();
+    const claims = new Map<string, BackingClaim>([
+      [claimId, { verified_substring: true, quote: 'Admitted with pneumonia and treated with antibiotics.' }],
+    ]);
+    const fact = makeFact({
+      ontology_key: 'chc.other_significant',
+      subject: 'other_significant',
+      canonical_value: 'pneumonia',
+      supporting_claim_ids: [claimId],
+    });
+
+    const resolution = resolveSlot(slot, [fact], claims);
+    expect(resolution.fact_ids).toEqual([fact.id]);
+    expect(resolution.omitted).toBe(false);
+    expect(resolution.gap_prompt).toBeNull();
+  });
+
+  it('the same condition name backed by a verified claim whose quote does NOT contain it still falls through', () => {
+    const claimId = randomUUID();
+    const claims = new Map<string, BackingClaim>([
+      [claimId, { verified_substring: true, quote: 'Patient reports feeling generally well today.' }],
+    ]);
+    const fact = makeFact({
+      ontology_key: 'chc.other_significant',
+      subject: 'other_significant',
+      canonical_value: 'pneumonia',
+      supporting_claim_ids: [claimId],
+    });
+
+    const resolution = resolveSlot(slot, [fact], claims);
+    expect(resolution.fact_ids).toEqual([]);
+    expect(resolution.gap_prompt).toBe(slot.gap_prompt);
+  });
+});
+
 describe('buildArtifact — a structural slot can never disappear silently', () => {
   /**
    * THE REGRESSION GUARD for the defect this file was reviewed for.
@@ -260,7 +317,7 @@ describe('buildArtifact — a structural slot can never disappear silently', () 
    * The slot set is derived from the frozen template, never listed here — add
    * a fourth non-evidence slot to the template and this test covers it too.
    */
-  it('every non-evidence-driven, non-fallback slot is named as awaiting_fixed_copy', () => {
+  it('every non-evidence-driven, non-fallback slot that is not unconditionally filled is named as awaiting_fixed_copy', () => {
     const template = templateByKey('chc_dst_pack_v1');
     const structural = slotsOf(template)
       .map((s) => s.slot)
@@ -269,10 +326,24 @@ describe('buildArtifact — a structural slot can never disappear silently', () 
     // Fixture invariant: the cover/method slots exist and are structural.
     expect(structural.length).toBeGreaterThan(0);
 
-    const { artifact, omissions } = buildArtifact(buildInput('chc_dst_pack_v1'));
+    const { artifact, omissions, structuralAssertions } = buildArtifact(buildInput('chc_dst_pack_v1'));
     const namedByKey = new Map(omissions.map((o) => [o.slot_key, o]));
+    const structuralKeys = new Set(structuralAssertions.map((s) => s.slot_key));
 
     for (const slot of structural) {
+      // `cover.scope` is the one deliberate exception: `PERSISTENT_BANNER`
+      // needs no input and fills unconditionally (see `STRUCTURAL_COPY_SOURCES`
+      // in lib/ai/artifacts.ts) — a pack missing its scope statement is
+      // misleading about what it is, so it is never left out, even when
+      // `buildInput` supplies neither `person` nor `assembledOn`.
+      if (structuralKeys.has(slot.key)) {
+        expect(
+          artifact.assertions.some((a) => a.slot_key === slot.key),
+          `${slot.key} is unconditionally filled and should never be omitted`,
+        ).toBe(true);
+        continue;
+      }
+
       expect(
         artifact.assertions.some((a) => a.slot_key === slot.key),
         `${slot.key} produced an assertion — did someone invent its copy?`,
@@ -354,6 +425,7 @@ function buildInput(templateKey: 'chc_dst_pack_v1' | 'gp_brief_v1'): BuildArtifa
     facts: fixture.facts,
     claimsById: claimsById(),
     personId: fixture.person.id,
+    createdAt: CREATED_AT,
   };
 }
 
@@ -372,6 +444,7 @@ describe('buildArtifact — both templates over the same fact set', () => {
       facts: [],
       claimsById: new Map(),
       personId: fixture.person.id,
+      createdAt: CREATED_AT,
     });
     const assertion = artifact.assertions.find((a) => a.slot_key === 'drug_therapies.framework_note');
     expect(assertion).toBeDefined();
@@ -445,11 +518,22 @@ describe('buildArtifact — both templates over the same fact set', () => {
     // frozen gap_prompt copy contains the word "suggest" and was being copied
     // into `Assertion.text`. It no longer is: a gap-prompted assertion now
     // carries EMPTY text (the fixture's own convention) and the prompt is read
-    // live from the template at render time. So the narrowing is gone and
-    // every assertion this module emits is checked.
-    const chc = buildFor('chc_dst_pack_v1');
-    const gp = buildFor('gp_brief_v1');
-    for (const assertion of [...chc.assertions, ...gp.assertions]) {
+    // live from the template at render time. So the narrowing is gone for
+    // fact-backed assertions and every one of those this module emits is
+    // checked. Verbatim-copy assertions (`structuralAssertions`) are the one
+    // deliberate exception, the same way `gp_prompt` smuggling is excluded
+    // below: `PERSISTENT_BANNER` is shipped copy from prd.md §8.5 and
+    // legitimately contains "urgent" as part of the meta-disclaimer that
+    // tells a reader where to go when something IS urgent — see the header
+    // of lib/copy/safety.ts. That is not this module inventing a judgement.
+    const chc = buildArtifact(buildInput('chc_dst_pack_v1'));
+    const gp = buildArtifact(buildInput('gp_brief_v1'));
+    const structuralKeys = new Set([
+      ...chc.structuralAssertions.map((s) => s.slot_key),
+      ...gp.structuralAssertions.map((s) => s.slot_key),
+    ]);
+    for (const assertion of [...chc.artifact.assertions, ...gp.artifact.assertions]) {
+      if (structuralKeys.has(assertion.slot_key)) continue;
       expect(
         JUDGEMENT_LANGUAGE_RE.test(assertion.text),
         `judgement language in ${assertion.slot_key}: "${assertion.text}"`,

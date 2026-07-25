@@ -31,7 +31,7 @@ import {
   isFrameworkCitationSlot,
   levelSlotDomain,
 } from '@/lib/ai/templates';
-import { buildArtifact, resolveSlot, type BuildArtifactInput } from '@/lib/ai/artifacts';
+import { buildArtifact, resolveSlot, type BuildArtifactInput, type BackingClaim } from '@/lib/ai/artifacts';
 import { PERSISTENT_BANNER, footer, BANNED_ARTEFACT_TITLES } from '@/lib/copy/safety';
 import { FRAMEWORK_CITATIONS } from '@/lib/detectors/well_managed';
 import { filterOutput } from '@/lib/safety/output_filter';
@@ -58,10 +58,15 @@ function collectKeys(value: unknown, keys: Set<string> = new Set()): Set<string>
 const fixture = CaseSnapshot.parse(fixtureRaw);
 const PERSON = { display_name: fixture.person.display_name };
 const ASSEMBLED_ON = '2026-07-25';
+/** Fixed, deterministic build clock — the caller (never `lib/ai/**`) owns
+ *  the clock now that `createdAt` is a required `BuildArtifactInput` field. */
+const CREATED_AT = '2026-07-25T00:00:00.000Z';
 
-function claimsById(): ReadonlyMap<string, Pick<Claim, 'verified_substring'>> {
-  const map = new Map<string, Pick<Claim, 'verified_substring'>>();
-  for (const claim of fixture.claims) map.set(claim.id, { verified_substring: claim.verified_substring });
+function claimsById(): ReadonlyMap<string, BackingClaim> {
+  const map = new Map<string, BackingClaim>();
+  for (const claim of fixture.claims) {
+    map.set(claim.id, { verified_substring: claim.verified_substring, quote: claim.quote });
+  }
   return map;
 }
 
@@ -71,6 +76,7 @@ function baseInput(overrides: Partial<BuildArtifactInput> = {}): BuildArtifactIn
     facts: fixture.facts,
     claimsById: claimsById(),
     personId: fixture.person.id,
+    createdAt: CREATED_AT,
     ...overrides,
   };
 }
@@ -131,14 +137,25 @@ describe('structural slots — filled with person + assembledOn, verbatim, from 
 });
 
 describe('structural slots — with no person / no assembledOn, stay omitted with an honest reason, no invented value', () => {
-  it('with neither person nor assembledOn supplied, all three structural slots are omitted as awaiting_fixed_copy', () => {
+  // `cover.scope` is the one deliberate exception in every case below:
+  // `PERSISTENT_BANNER` needs no input and fills unconditionally (see
+  // `STRUCTURAL_COPY_SOURCES` in lib/ai/artifacts.ts) — a pack missing its
+  // scope statement is misleading about what it is, so it is never left out,
+  // with or without a `person`/`assembledOn`. `cover.subject` and
+  // `method.provenance` are the two slots that genuinely need an input and
+  // stay honestly omitted without one.
+  const NEEDS_INPUT_KEYS = ['cover.subject', 'method.provenance'] as const;
+
+  it('with neither person nor assembledOn supplied, cover.subject and method.provenance are omitted as awaiting_fixed_copy, but cover.scope still fills', () => {
     const { artifact, omissions } = buildArtifact(baseInput());
-    for (const key of structuralSlotKeys()) {
+    for (const key of NEEDS_INPUT_KEYS) {
       expect(artifact.assertions.some((a) => a.slot_key === key), `${key} unexpectedly filled`).toBe(false);
       const omission = omissions.find((o) => o.slot_key === key);
       expect(omission, `${key} missing without a reason`).toBeDefined();
       expect(omission?.reason).toBe('awaiting_fixed_copy');
     }
+    expect(artifact.assertions.find((a) => a.slot_key === 'cover.scope')?.text).toBe(PERSISTENT_BANNER);
+    expect(omissions.some((o) => o.slot_key === 'cover.scope')).toBe(false);
   });
 
   it('with person but no assembledOn, cover.subject fills but method.provenance stays omitted', () => {
@@ -151,12 +168,13 @@ describe('structural slots — with no person / no assembledOn, stay omitted wit
     expect(omission?.reason).toBe('awaiting_fixed_copy');
   });
 
-  it('with assembledOn but no person, nothing structural fills — no invented name', () => {
+  it('with assembledOn but no person, cover.subject and method.provenance stay unfilled — no invented name — but cover.scope still fills', () => {
     const { artifact, omissions } = buildArtifact(baseInput({ assembledOn: ASSEMBLED_ON }));
-    for (const key of structuralSlotKeys()) {
+    for (const key of NEEDS_INPUT_KEYS) {
       expect(artifact.assertions.some((a) => a.slot_key === key)).toBe(false);
       expect(omissions.find((o) => o.slot_key === key)?.reason).toBe('awaiting_fixed_copy');
     }
+    expect(artifact.assertions.find((a) => a.slot_key === 'cover.scope')?.text).toBe(PERSISTENT_BANNER);
   });
 });
 
@@ -211,25 +229,36 @@ describe('filterOutput boundary — verbatim copy bypasses it, composed fact tex
     expect(filterOutput(PERSISTENT_BANNER, []).ok).toBe(false);
   });
 
-  it('a composed fact-text slot that trips the filter (an uncited condition name) falls through to its gap_prompt, never emitting the flagged text', () => {
+  it('a composed fact-text slot whose condition name IS cited by its own supporting claim survives filterOutput and fills the slot', () => {
     // Margaret's own heart-failure fact, composed as "<subject>: <value>",
-    // fails filterOutput with no cited spans — an UNCITED CONDITION NAME.
-    // This is real, current output on the shipped fixture:
+    // used to fail filterOutput because the caller passed no cited spans at
+    // all — an UNCITED CONDITION NAME, even though the diagnosis is quoted
+    // word for word from her discharge summary. `citedSpansFor`
+    // (lib/ai/artifacts.ts) now supplies that real quote, so the SAME
+    // composed text now passes:
     const heartFailureFact = fixture.facts.find((f) => f.ontology_key === 'diagnosis.heart_failure');
     if (heartFailureFact === undefined) throw new Error('fixture invariant: expected the heart failure fact');
     const composed = `${heartFailureFact.subject}: ${heartFailureFact.canonical_value}`;
-    const filtered = filterOutput(composed, []);
-    expect(filtered).toEqual({ ok: false, reason: 'uncited_condition', term: 'heart failure' });
+    const claims = claimsById();
+    const citedSpans = heartFailureFact.supporting_claim_ids
+      .map((id) => claims.get(id))
+      .filter((c): c is BackingClaim => c !== undefined && c.verified_substring === true)
+      .map((c) => c.quote);
+    expect(citedSpans.length).toBeGreaterThan(0);
+    expect(filterOutput(composed, citedSpans)).toEqual({ ok: true });
 
     // gp_brief_v1's "history" slot (ontology_match includes 'diagnosis.*')
-    // matches this fact. Because the composed text fails the filter, the slot
-    // must fall through to its gap_prompt exactly as if nothing had matched
-    // — the flagged text must never reach Assertion.text.
+    // matches this fact. Because the composed text now clears the filter,
+    // the slot fills from evidence — the diagnosis is PRESENT and CITED,
+    // not suppressed. This is the evidence-loss defect the orchestrator
+    // fixed: Margaret's own reason for being in hospital must not vanish
+    // from her GP brief.
     const { artifact } = buildArtifact({
       template: templateByKey('gp_brief_v1'),
       facts: fixture.facts,
-      claimsById: claimsById(),
+      claimsById: claims,
       personId: fixture.person.id,
+      createdAt: CREATED_AT,
     });
     const historySlot = slotsOf(templateByKey('gp_brief_v1'))
       .map((s) => s.slot)
@@ -237,21 +266,23 @@ describe('filterOutput boundary — verbatim copy bypasses it, composed fact tex
     if (historySlot === undefined) throw new Error('gp_brief_v1 has no "history" slot');
     const assertion = artifact.assertions.find((a) => a.slot_key === 'history');
     expect(assertion).toBeDefined();
-    expect(assertion?.text).toBe('');
-    expect(assertion?.citation_verified).toBe(false);
-    expect(assertion?.text).not.toContain('heart failure');
-    expect(assertion?.text).not.toContain('Decompensated');
+    expect(assertion?.citation_verified).toBe(true);
+    expect(assertion?.fact_ids).toContain(heartFailureFact.id);
+    expect(assertion?.text).toContain('heart failure');
+    expect(assertion?.text).toContain('Decompensated');
   });
 
-  it('resolveSlot itself reports the same fall-through directly, isolated from buildArtifact', () => {
+  it('resolveSlot itself reports the same fill directly, isolated from buildArtifact', () => {
     const historySlot = slotsOf(templateByKey('gp_brief_v1'))
       .map((s) => s.slot)
       .find((s) => s.key === 'history');
     if (historySlot === undefined) throw new Error('gp_brief_v1 has no "history" slot');
+    const heartFailureFact = fixture.facts.find((f) => f.ontology_key === 'diagnosis.heart_failure');
+    if (heartFailureFact === undefined) throw new Error('fixture invariant: expected the heart failure fact');
     const resolution = resolveSlot(historySlot, fixture.facts, claimsById());
-    expect(resolution.fact_ids).toEqual([]);
-    expect(resolution.gap_prompt).toBe(historySlot.gap_prompt);
+    expect(resolution.fact_ids).toContain(heartFailureFact.id);
     expect(resolution.omitted).toBe(false);
+    expect(resolution.gap_prompt).toBeNull();
   });
 });
 
@@ -300,8 +331,8 @@ describe('level slots — never narrative prose, only a level valid for that exa
       superseded_by: null,
     };
     const verifiedClaimId = randomUUID();
-    const claims = new Map<string, Pick<Claim, 'verified_substring'>>([
-      [verifiedClaimId, { verified_substring: true }],
+    const claims = new Map<string, BackingClaim>([
+      [verifiedClaimId, { verified_substring: true, quote: 'placeholder' }],
     ]);
     const factWithClaim: Fact = { ...fact, supporting_claim_ids: [verifiedClaimId] };
 
@@ -335,8 +366,8 @@ describe('level slots — never narrative prose, only a level valid for that exa
       if (slot === undefined) throw new Error(`${slotKey} not found in chc_dst_pack_v1`);
 
       const claimId = randomUUID();
-      const claims = new Map<string, Pick<Claim, 'verified_substring'>>([
-        [claimId, { verified_substring: true }],
+      const claims = new Map<string, BackingClaim>([
+        [claimId, { verified_substring: true, quote: 'placeholder' }],
       ]);
       const fact: Fact = {
         id: randomUUID(),
@@ -383,6 +414,7 @@ describe('whole-artefact invariants still hold with structural fills and level-s
         facts: fixture.facts,
         claimsById: claimsById(),
         personId: fixture.person.id,
+        createdAt: CREATED_AT,
         person: PERSON,
         assembledOn: ASSEMBLED_ON,
       });
@@ -398,6 +430,7 @@ describe('whole-artefact invariants still hold with structural fills and level-s
         facts: fixture.facts,
         claimsById: claimsById(),
         personId: fixture.person.id,
+        createdAt: CREATED_AT,
         person: PERSON,
         assembledOn: ASSEMBLED_ON,
       });

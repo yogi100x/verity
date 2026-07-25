@@ -201,17 +201,29 @@ export interface InspectArtifactView {
        *  silently presented as a level. */
       readonly form_invalid_levels: readonly string[];
       readonly citation_verified: boolean;
-      /** Empty when the slot fell through to its gap prompt. */
+      /** Empty when the slot fell through to its gap prompt, or when the slot
+       *  is verbatim copy (its evidence is not a resolved `Fact`). */
       readonly citations: ReadonlyArray<{
         readonly quote: string;
         readonly source_title: string;
       }>;
-      readonly state: 'filled' | 'gap_prompt';
+      /** A structural slot is neither evidence-backed nor missing: it is
+       *  copy this pipeline may assert without a fact behind it (Lane C's
+       *  fixed wording, or a verbatim framework citation), and a reader must
+       *  not mistake it for either `filled` or `gap_prompt`. Derived from
+       *  `BuildArtifactResult.structuralAssertions` (`lib/ai/artifacts.ts`),
+       *  never re-derived from a slot-key list. */
+      readonly state: 'filled' | 'verbatim_copy' | 'gap_prompt';
+      /** The framework citation's `ref`, for a `verbatim_copy` slot filled
+       *  from `FRAMEWORK_CITATIONS`; `null` for Lane C copy (no `ref` to
+       *  show) and for every other state. */
+      readonly verbatim_attribution: string | null;
     }>;
   }>;
   readonly counts: {
     readonly slots_total: number;
     readonly filled: number;
+    readonly verbatim_copy: number;
     readonly gap_prompted: number;
     readonly omitted: number;
   };
@@ -464,8 +476,38 @@ function renderLevelWarning(slot: ArtifactSlotView): string {
         </p>`;
 }
 
+/**
+ * A `verbatim_copy` slot's body: fixed wording this pipeline is allowed to
+ * assert without a fact behind it — Lane C's copy (`lib/copy/safety.ts`) or a
+ * verbatim National Framework citation (`lib/detectors/well_managed.ts`).
+ * Labelled distinctly from both `filled` ("Evidence-backed — from the
+ * record") and `gap_prompt` ("No evidence yet") so a reader cannot mistake
+ * fixed copy for either. `slot.text` here is Lane C's own copy or a
+ * framework citation and is rendered as-is — it was never routed through
+ * `filterOutput` upstream (`lib/ai/artifacts.ts`'s `STRUCTURAL_COPY_SOURCES`
+ * / `FRAMEWORK_CITATION_SOURCES` paths bypass it on purpose: the persistent
+ * banner contains "urgent" and "999" by design) — but it is still escaped
+ * here, like every other interpolated value on this page.
+ */
+function renderVerbatimBody(slot: ArtifactSlotView): string {
+  const attribution =
+    slot.verbatim_attribution === null
+      ? ''
+      : `<p class="artifact-slot-verbatim-attribution">Source: ${escapeHtml(slot.verbatim_attribution)}</p>`;
+  return `
+        <p class="artifact-slot-verbatim-label">Fixed wording — not evidence from the record</p>
+        <p class="artifact-slot-text">${escapeHtml(slot.text)}</p>
+        ${attribution}`;
+}
+
+const STATE_CLASS: Readonly<Record<ArtifactSlotView['state'], string>> = {
+  filled: 'artifact-slot-filled',
+  verbatim_copy: 'artifact-slot-verbatim',
+  gap_prompt: 'artifact-slot-gap',
+};
+
 function renderArtifactSlot(slot: ArtifactSlotView): string {
-  const stateClass = slot.state === 'filled' ? 'artifact-slot-filled' : 'artifact-slot-gap';
+  const stateClass = STATE_CLASS[slot.state];
   // The `quote` renderer's body already IS the citation list; repeating it
   // below would show every quote twice.
   const evidence =
@@ -478,7 +520,9 @@ function renderArtifactSlot(slot: ArtifactSlotView): string {
   const body =
     slot.state === 'filled'
       ? `${renderFilledBody(slot)}${renderLevelWarning(slot)}${evidence}`
-      : `
+      : slot.state === 'verbatim_copy'
+        ? renderVerbatimBody(slot)
+        : `
         <p class="artifact-slot-gap-label">No evidence yet — what to ask for</p>
         <p class="artifact-slot-text artifact-slot-gap-text">${escapeHtml(slot.gap_prompt ?? '')}</p>`;
 
@@ -541,9 +585,12 @@ function renderArtifactOmissions(artifact: InspectArtifactView): string {
 
 function renderArtifactCard(artifact: InspectArtifactView): string {
   const { counts } = artifact;
-  const countLine = `${counts.slots_total} slots · ${counts.filled} filled from evidence · ${counts.gap_prompted} asking for a document · ${counts.omitted} left out (each one named below)`;
+  const countLine =
+    `${counts.slots_total} slots · ${counts.filled} filled from evidence · ` +
+    `${counts.verbatim_copy} fixed wording (not evidence) · ` +
+    `${counts.gap_prompted} asking for a document · ${counts.omitted} left out (each one named below)`;
   return `
-    <div class="artifact-card" data-template-key="${escapeHtml(artifact.template_key)}" data-slots-total="${escapeHtml(String(counts.slots_total))}" data-filled="${escapeHtml(String(counts.filled))}" data-gap-prompted="${escapeHtml(String(counts.gap_prompted))}" data-omitted="${escapeHtml(String(counts.omitted))}">
+    <div class="artifact-card" data-template-key="${escapeHtml(artifact.template_key)}" data-slots-total="${escapeHtml(String(counts.slots_total))}" data-filled="${escapeHtml(String(counts.filled))}" data-verbatim-copy="${escapeHtml(String(counts.verbatim_copy))}" data-gap-prompted="${escapeHtml(String(counts.gap_prompted))}" data-omitted="${escapeHtml(String(counts.omitted))}">
       <h3 class="artifact-title">${escapeHtml(artifact.title)}</h3>
       <p class="artifact-audience">For: ${escapeHtml(artifact.audience)}</p>
       <p class="artifact-count-line">${escapeHtml(countLine)}</p>
@@ -1284,6 +1331,23 @@ const STYLE = `
   .artifact-slot-gap {
     background: var(--paper);
     border: 1px dashed var(--hairline);
+  }
+  .artifact-slot-verbatim {
+    background: white;
+    border: 1px solid var(--ink-muted);
+  }
+  .artifact-slot-verbatim-label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--ink-muted);
+    margin: 0 0 0.4rem;
+  }
+  .artifact-slot-verbatim-attribution {
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+    font-style: italic;
+    margin: 0.4rem 0 0;
   }
   .artifact-slot-gap-label {
     font-size: 0.78rem;
