@@ -1,0 +1,59 @@
+components/artefacts/__tests__/aa-line.test.tsx
+  s_afabf214a6fe93::t_1aa831aa99d5aa 1-124
+app/(app)/artefacts/[key]/page.tsx
+  s_50028ba6d38951::t_e3571df415e6f1 32-47
+app/(app)/gaps/page.tsx
+  s_d0753938e78b1e::t_aec1bedd28460a 2-3,11-25,38-47
+components/artefacts/ArtefactDocument.tsx
+  s_50028ba6d38951::t_1429554c8356c4 18,26-36,39-43,70-73
+components/artefacts/AttendanceAllowanceLine.tsx
+  s_1182cf36e89bf7::t_03a33c83263b2d 1-59
+components/gaps/GapCard.tsx
+  s_d0753938e78b1e::t_1d15f7c5032a53 1-2,9-19,22,24-25,27-36,56-62
+components/gaps/__tests__/gap-card.test.tsx
+  s_d0753938e78b1e::t_06baf6e8c3ebae 4-7,11,15,37-46,49,54,59,65-73,77
+components/letters/LetterModal.tsx
+  s_d0753938e78b1e::t_41a986c230949e 1-242
+components/letters/__tests__/letter-modal.test.tsx
+  s_d0753938e78b1e::t_f0cd8978e82b46 1-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "895025c4fba94fc10428727e9115b6d0119ba92b",
+  "prompts": {},
+  "sessions": {
+    "s_1182cf36e89bf7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ad19a104773bc3034",
+        "model": "unknown"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    },
+    "s_50028ba6d38951": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a4ef83cfe5a75b0e5",
+        "model": "unknown"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    },
+    "s_afabf214a6fe93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c999a24-05c7-418e-a055-0e42e33d7f6d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    },
+    "s_d0753938e78b1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a70905a4ecc48990b",
+        "model": "unknown"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    }
+  }
+}
