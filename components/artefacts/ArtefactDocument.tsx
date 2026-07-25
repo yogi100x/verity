@@ -12,6 +12,7 @@
  */
 
 import { useState } from "react";
+import { footer } from "@/lib/copy/safety";
 import type { ArtifactView } from "@/components/data/dal";
 import { ArtefactSection } from "./ArtefactSection";
 import { ReviewGate } from "./ReviewGate";
@@ -51,12 +52,9 @@ export function ArtefactDocument({ view, todayLabel }: ArtefactDocumentProps) {
       </div>
 
       <footer className="print-footer print-avoid-break mt-12 border-t border-hairline pt-6 text-body-s text-ink-secondary">
-        <p>
-          Assembled by {displayName.length > 0 ? displayName : "—"} using Verity on{" "}
-          {todayLabel} from documents they supplied and reviewed. This is not a clinical
-          record, not a clinical summary, and has not been reviewed by a clinician. Every
-          dated item links to the page it came from.
-        </p>
+        {/* Slot-filled from lib/copy/safety.ts — Lane C pins this template
+            byte-for-byte against prd.md §8.5. Never retype it here. */}
+        <p>{footer(displayName.length > 0 ? displayName : "—", todayLabel)}</p>
       </footer>
     </article>
   );
