@@ -1,0 +1,43 @@
+public/vercel.svg
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1
+public/globe.svg
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1
+public/window.svg
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1
+app/page.tsx
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1-65
+app/globals.css
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1-26
+tsconfig.json
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1-34
+postcss.config.mjs
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1-7
+app/layout.tsx
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1-33
+package.json
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1-23
+public/file.svg
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1
+public/next.svg
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1
+next.config.ts
+  s_afabf214a6fe93::t_3fd7bac5fbbcc9 1-7
+pnpm-lock.yaml
+  s_afabf214a6fe93::t_3e7ec6c114fe42 1-957
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "3ab56d6fb5eb797c54cac1c2bb9adaf1c9393664",
+  "prompts": {},
+  "sessions": {
+    "s_afabf214a6fe93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c999a24-05c7-418e-a055-0e42e33d7f6d",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    }
+  }
+}
