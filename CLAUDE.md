@@ -7,12 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Quick start
 
 ```bash
-./scripts/bootstrap.sh    # THE GATE — must end GREEN before any lane launches
+pnpm install    # installs deps AND the husky hooks (prepare script)
+pnpm test       # THE GATE — 20 tests, must be green
 ```
 
-There is no `package.json` in the repo yet — the Next.js scaffold happens at hour 0. `bootstrap.sh` scaffolds it, installs only the frozen stack, wires Vitest, appends the design tokens, and runs the keystone test. Idempotent; safe to re-run. It never touches `lib/contracts.ts`, `fixtures/`, `docs/` or the README.
-
-After bootstrap, `pnpm test` works normally.
+The Next.js scaffold is **already committed**: `package.json`, lockfile, `app/`, `vitest.config.ts` all exist and the suite passes. **Do not run `scripts/bootstrap.sh`** — it predates the scaffold and re-running it would re-resolve dependencies and overwrite package scripts. It is kept for reference only and exits early if it detects the scaffold.
 
 The keystone test (`lib/__tests__/contract.test.ts`) validates the entire contract against `fixtures/margaret.json`. It is the first quality gate at hour 0 and the first thing the orchestrator checks in every merge window. If it fails, every lane is building against a lie.
 
@@ -27,11 +26,10 @@ The keystone test (`lib/__tests__/contract.test.ts`) validates the entire contra
 | `pnpm test -- --reporter=verbose` | Run with verbose output for debugging |
 | `pnpm test:watch` | Watch mode |
 | `pnpm typecheck` | `tsc --noEmit` |
-| `./scripts/bootstrap.sh` | Hour 0: scaffold + frozen stack + gate. Run once, by the orchestrator, on `main`. |
 | `./scripts/db-push.sh` | Apply schema + RLS. Lanes A and D only. Reminds you to enable anonymous sign-ins. |
-| `./scripts/verify.sh` | **Run before every PR.** Contract unmodified, no judgement fields, no urgency language in components, types and tests green, changes confined to one lane. |
+| `./scripts/verify.sh` | **Run before every PR.** Contract unmodified, no judgement fields, no urgency language in components, types and tests green, changes confined to one lane. The pre-commit hook runs it with `--fast`; the pre-push hook runs it in full. |
 
-Before `bootstrap.sh` runs, the repo is contract + fixtures + docs only — there is no `package.json`, so `pnpm` commands will fail. Lanes add the frontend, API and detectors as they build.
+**Enforcement:** the repo is public and `main` is protected (no force-pushes, no deletions). Content rules are enforced by the husky hooks, which `pnpm install` wires automatically. Never commit with `--no-verify`.
 
 ---
 
@@ -50,10 +48,12 @@ Before `bootstrap.sh` runs, the repo is contract + fixtures + docs only — ther
 | Lane | Owner | Territory | Needs API? | Needs DB? | Brief |
 |------|-------|-----------|------------|-----------|-------|
 | **A** | Pipeline | `lib/ai/**`, `app/api/**`, `supabase/migrations/0002+` (additive only) | Yes | Yes | `docs/lanes/lane-a-pipeline.md` |
-| **B** | Surface | `app/(app)/**`, `components/**`, `app/globals.css`, PWA manifest/icons | No | No | `docs/lanes/lane-b-surface.md` |
+| **B** | Surface | `app/(app)/**`, `app/page.tsx`, `app/layout.tsx`, `app/globals.css`, `app/favicon.ico`, `components/**`, PWA manifest/icons | No | No | `docs/lanes/lane-b-surface.md` |
 | **C** | Safety & detectors | `lib/safety/**`, `lib/detectors/**`, `lib/copy/**` | No | No | `docs/lanes/lane-c-safety.md` |
-| **D** | Integrator & demo | `demo/**`, `scripts/**`, `.github/**`, `vercel.json`, service worker | Yes | Yes | `docs/lanes/lane-d-integrator.md` |
+| **D** | Integrator & demo | `demo/**`, `scripts/**`, `.github/**`, `vercel.json`, `public/sw.js`, `lib/modes/**` | Yes | Yes | `docs/lanes/lane-d-integrator.md` |
 | **E** | Voice & channels | `lib/voice/**`, `app/api/voice/**` | Yes | Yes | `docs/lanes/lane-e-voice.md` |
+
+Infra/config files (`package.json`, lockfile, `pnpm-workspace.yaml`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `vitest.config.ts`, `.husky/**`, `lib/__tests__/**`) belong to the **orchestrator**; Lane D may touch them on request (e.g. CI scripts). Any other lane needing a change there writes it in the PR description.
 
 Lanes B and C need nothing but the repo — they can start the instant the contract lands and cannot be blocked.
 
@@ -110,7 +110,7 @@ If a lane needs a slot that does not exist, that is a template change — it goe
 | Database | `@supabase/supabase-js` + `@supabase/ssr` | anonymous sign-in; SSR client pattern |
 | AI | `@anthropic-ai/sdk` raw | forced strict tool use, no abstraction layer |
 | Tests | **Vitest** + Testing Library | faster than Jest, ESM-native |
-| CI | GitHub Actions | typecheck → test → Vercel preview |
+| CI | GitHub Actions | typecheck → test → Vercel preview — **not yet built**; Lane D's first task |
 | Deploy | Vercel (`lhr1`) | keeps functions near Supabase (London) |
 
 ### Why certain things are rejected
@@ -146,19 +146,6 @@ See `docs/stack-freeze.md` for the full rationale and rejection list.
 | **Testing what you built** | `docs/user-journey.md` — 9 click-and-tick journeys, lane-attributed. This is how the orchestrator reviews. |
 | **Understanding data sources and CHC** | `docs/data-sources.md` — real test documents plus framework citations verified against primary sources |
 | **Deciding what to build if you finish early** | `docs/implementation-plan.md` §7b — eight ranked stretch goals with owners |
-
----
-
-## Context-mode routing
-
-This repo uses `context-mode` MCP tools to protect your context window. CLAUDE.md previously documented this — those rules still apply. Key redirections:
-
-- **Bash >20 lines output:** Use `ctx_batch_execute(commands, queries)` instead
-- **Grep with large results:** Use `ctx_execute(language: "shell", code: "...")` to run in sandbox
-- **File analysis:** Use `ctx_execute_file(path, language, code)` instead of Read
-- **WebFetch/curl/wget:** Use `ctx_fetch_and_index(url, source)` then `ctx_search(queries)`
-
-See `/caveman` mode toggle at the top of your conversation if you need terse output during development.
 
 ---
 

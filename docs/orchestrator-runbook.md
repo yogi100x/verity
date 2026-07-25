@@ -14,36 +14,31 @@ All documents, decisions and accounts — safe under any pre-work rule. No code.
 - [ ] Twilio: confirm you can reach the console and find your existing US number. Nothing to provision — wiring happens at hour 0 once a preview URL exists.
 - [ ] Supabase project: **London / eu-west-2**, and **enable Anonymous Sign-Ins** (Auth → Providers). Miss this and Lane A stalls at hour 2.
 - [ ] Anthropic **commercial** key (console.anthropic.com, not a claude.ai login).
-- [ ] GitHub repo created, empty.
+- [ ] GitHub repo live at https://github.com/yogi100x/verity — public, `main` protected, scaffold committed, 20 tests green.
 - [ ] Vercel project created, linked, Anthropic + Supabase env vars set.
 - [ ] Read `demo/documents/README.md` and check Margaret's story hangs together.
 - [ ] Open `demo/design-showcase.html` in a browser. That is the visual target — if you don't like it, say so tonight.
-- [ ] **Throwaway rehearsal of hour 0** (~20 min, in `/tmp`, **not** in your repo): scaffold the Next app, install the frozen stack, run the migration against Supabase, confirm anonymous sign-in works, then `rm -rf` it. You keep clean hands on pre-work rules and you learn where the friction is — turning hour 0 from discovery into typing.
 - [ ] Sleep. You will need it more than the extra three hours.
 
 ---
 
 ## Hour 0 — you alone, no agents (30 minutes)
 
-The contract, migration, fixture and keystone test are **already written and committed**. Hour 0 is now scaffolding and verification, not authoring.
+The contract, migration, fixtures, templates, keystone tests **and the Next.js scaffold are all committed**, and `main` is public and protected. Hour 0 is verification and provisioning only.
 
 ```bash
 git clone https://github.com/yogi100x/verity.git && cd verity
-./scripts/bootstrap.sh
+pnpm install && pnpm test     # 20 tests — must be green
 ```
-
-That scaffolds Next.js, installs the frozen stack, wires Vitest, appends the design tokens, and runs the keystone test.
 
 Then, in order:
 
-1. **`./scripts/db-push.sh`** — applies the schema and RLS
-2. **Enable Anonymous Sign-Ins** in the Supabase dashboard (Authentication → Sign In / Providers). Miss this and Lane A stalls around hour 2 with an error that looks like RLS and isn't.
-3. Fill in `.env.local` — Anthropic key and the two Supabase keys
-4. `git add -A && git commit -m "chore: scaffold" && git push`
-5. **Protect `main`** — GitHub → Settings → Branches. This is what stops an agent editing the contract at 3am.
-6. After the first preview deploys: paste `https://<preview>.vercel.app/api/voice/inbound` into Twilio Console → Phone Numbers → your number → Voice Configuration → "A call comes in" (Webhook, HTTP POST). Two minutes, unblocks Lane E.
+1. `cp .env.example .env.local` — Anthropic key now; Supabase keys when you have them
+2. **`./scripts/db-push.sh`** — applies the schema and RLS. Needed by ~H4, not minute 0: Lane A's first task (the extraction spike) is deliberately no-DB.
+3. **Enable Anonymous Sign-Ins** in the Supabase dashboard (Authentication → Sign In / Providers). Miss this and Lane A stalls around hour 2 with an error that looks like RLS and isn't.
+4. After the first preview deploys: paste `https://<preview>.vercel.app/api/voice/inbound` into Twilio Console → Phone Numbers → your number → Voice Configuration → "A call comes in" (Webhook, HTTP POST). Two minutes, unblocks Lane E.
 
-> **Gate: if `bootstrap.sh` ends RED, do not launch lanes.** Every lane would build against a lie. This is the highest-value 20 minutes of the weekend.
+> **Gate: if `pnpm test` is red, do not launch lanes.** Every lane would build against a lie.
 
 ---
 

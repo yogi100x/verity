@@ -27,6 +27,16 @@ If a lane believes something here is wrong, it says so in its PR description. It
 | PWA | **hand-rolled manifest + service worker** | no plugin; Lane D owns the SW (see its brief) |
 | PDF | **none** — `window.print()` | a print stylesheet is visually identical and an hour cheaper |
 
+### Test & tooling infrastructure — already installed, approved
+
+These are in `package.json` and are part of the freeze; they are dev-only and never ship:
+
+`@vitejs/plugin-react` · `vite-tsconfig-paths` · `jsdom` · `@testing-library/jest-dom` · `@tailwindcss/postcss` · `husky`
+
+Lane D: a lockfile diff touching only these (or their transitive deps) is expected, not a violation.
+
+**Typings-lag exception, scope:** `@ts-expect-error` with a comment is acceptable where third-party typings lag — SDK beta blocks **and** build-tool version skew (e.g. the vite 7/8 plugin-context mismatch in `vitest.config.ts`). It is never acceptable on product code paths.
+
 **"Latest stable" means latest at hour 0, then frozen.** Run `pnpm create next-app@latest`, commit the lockfile, and never upgrade during the build. A minor version bump at hour 18 is an unforced error.
 
 ---

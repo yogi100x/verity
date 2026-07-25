@@ -169,7 +169,7 @@ Phase 1 ships two templates: `chc_dst_pack_v1` and `gp_brief_v1`.
 
 ## 6. The contract
 
-This is typed at hour 0 and **frozen**. Changing it requires the orchestrator, never an agent acting alone.
+**Abridged sketch — `lib/contracts.ts` is authoritative and already committed.** Where this section and that file disagree, the file wins. Changing it requires the orchestrator, never an agent acting alone.
 
 ```ts
 // lib/contracts.ts
@@ -180,7 +180,7 @@ export type Provenance =
   | 'system_inferred'
   | 'unknown';
 
-export type SourceKind = 'pdf' | 'image' | 'audio' | 'text';
+export type SourceKind = 'pdf' | 'image' | 'audio' | 'text' | 'juno_conversation';
 
 export type DatePrecision = 'exact' | 'month' | 'year' | 'approximate' | 'unknown';
 
@@ -344,7 +344,7 @@ A prompt instruction is not a control. All three are code.
 
 ### 8.3 Deterministic red flags
 
-`lib/red_flags.ts` — pure TypeScript, unit-tested, runs on the concern/free-text fields **before any model call**. Never over uploaded document text (a letter mentioning historical chest pain would fire on every run).
+`lib/safety/red_flags.ts` — pure TypeScript, unit-tested, runs on the concern/free-text fields **before any model call**. Never over uploaded document text (a letter mentioning historical chest pain would fire on every run).
 
 On hit the pipeline **halts** — no model call is made — and renders a fixed card. Fourteen rules, taken from `research/01` §6: cardiac chest pain, stroke/FAST, airway, anaphylaxis, sepsis, uncontrolled bleeding, collapse/seizure/head injury, thunderclap headache, cauda equina, acute limb/testicular ischaemia, self-harm intent, obstetric, metabolic, acute eye.
 
@@ -387,7 +387,7 @@ facts                  (per §6)
 claim_conflicts        (per §6)
 gaps                   (per §6)
 artifact_templates     (key, title, audience, sections jsonb)
-artifacts              (id, person_id, template_key, rendered jsonb, user_verified, created_at)
+artifacts              (id, person_id, template_key, user_verified, created_at)
 assertions             (id, artifact_id, slot_key, text, fact_ids[], citation_verified)
 consent_records        (id, person_id, member_id, basis, declared_name, accepted_at)
 ```

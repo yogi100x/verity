@@ -15,6 +15,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# ---------------------------------------------------------------- GUARD
+# The scaffold is now COMMITTED to the repo. Running this script after that
+# point would re-resolve dependency specs to latest (e.g. zod 3 -> 4, which
+# breaks the frozen contract) and overwrite package.json scripts.
+if [ -f package.json ]; then
+  printf '\033[31mScaffold already committed — this script is historical.\033[0m\n'
+  echo "Use instead:   pnpm install && pnpm test"
+  exit 1
+fi
+
 bold() { printf '\033[1m%s\033[0m\n' "$1"; }
 ok()   { printf '  \033[32m\xe2\x9c\x93\033[0m %s\n' "$1"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }

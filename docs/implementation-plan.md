@@ -28,7 +28,10 @@
 | `lib/safety/**`, `lib/detectors/**`, `lib/copy/**` | **Lane C** | Pure functions, no I/O |
 | `demo/**`, `scripts/**`, `.github/**`, `vercel.json` | **Lane D** | Assets, seed, CI, deploy, replay |
 | `lib/voice/**`, `app/api/voice/**` | **Lane E** | Browser capture, then telephony webhook |
+| `app/page.tsx`, `app/layout.tsx`, `app/favicon.ico` | **Lane B** | The scaffold's placeholder `app/page.tsx` becomes the landing page |
 | `public/manifest.json`, `public/icons/**` | **Lane B** | PWA manifest, icons, install prompt |
+| `lib/modes/**` | **Lane D** | The `?mode=live\|fixtures\|replay` switch. Lane A calls model + DB **only through this wrapper** — that is the seam that lets D own the modes without touching A's files. |
+| `package.json`, lockfile, `tsconfig.json`, `next.config.ts`, `vitest.config.ts`, `.husky/**`, `lib/__tests__/**` | **Orchestrator** (D on request) | Infra. Any lane needing a change writes it in the PR description. |
 | `public/sw.js`, service-worker registration | **Lane D** | Caching strategy — must not break `?mode=` switching |
 | `docs/**` | Anyone, append-only | Never delete another lane's notes |
 
@@ -45,6 +48,8 @@ If a lane needs a change outside its territory, it writes the request in its PR 
 | **C** | Safety & detectors | **No** | **No** | `docs/lanes/lane-c-safety.md` |
 | **D** | Integrator & demo | Yes | Yes | `docs/lanes/lane-d-integrator.md` |
 | **E** | Voice & channels | Yes | Yes | `docs/lanes/lane-e-voice.md` — runs with a 4th or 5th machine |
+
+**If Lane E never launches** (3 machines): browser voice capture — phase-1 scope — falls back to **A + B**: Lane A builds `app/api/voice/upload` (store recording, create the `Source` row); Lane B adds the mic-record button that posts to it. The Twilio phone number is then cut, not inherited.
 
 B and C need nothing but the repo. That's deliberate: they can start the instant the contract lands, and they can't be blocked by anything.
 

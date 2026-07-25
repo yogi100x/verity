@@ -7,7 +7,9 @@
 **You enforce the stack freeze.** If a PR adds a dependency without orchestrator approval, reject it — including a lockfile change you didn't expect. Vitest, Tailwind-only, raw Anthropic SDK, no pgvector. Reasons are in the freeze document.
 
 **Branch:** `lane/d` for your own work; you also perform merges to `main` **only during a merge window, only with the orchestrator present**.
-**Territory:** `demo/**`, `scripts/**`, `.github/**`, `vercel.json`, `app/demo/**`.
+**Territory:** `demo/**`, `scripts/**`, `.github/**`, `vercel.json`, `app/demo/**`, `public/sw.js`, **`lib/modes/**`**.
+
+**`lib/modes/**` is how you own the three modes without touching Lane A's files.** You export a mode-aware wrapper (model call + DB read); Lane A routes everything through it. The recorder, fixture lookup by request hash, and replay all live inside the wrapper — one code path, three behaviours.
 
 ---
 

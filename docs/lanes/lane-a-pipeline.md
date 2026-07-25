@@ -6,7 +6,12 @@
 
 **The stack is frozen.** Do not install any dependency. If you think you need one, write it in your PR description — do not run `pnpm add`. Note especially: pgvector and RAG are rejected with reasons, and the Anthropic SDK is used raw, not through the Vercel AI SDK. Do not start until `pnpm test` is green on the fixture-conforms-to-contract test.
 
-**Branch:** `lane/a`. **Territory:** `lib/ai/**`, `app/api/**`, `supabase/migrations/000[2-9]_*.sql` (additive only).
+**Branch:** `lane/a`. **Territory:** `lib/ai/**`, `app/api/**` (except `app/api/voice/**` when Lane E is running), `supabase/migrations/000[2-9]_*.sql` (additive only).
+
+**Two seams that are yours to honour, not to own:**
+- **Modes.** Call the model and the DB only through Lane D's wrapper in `lib/modes/**` (`?mode=live|fixtures|replay`). Never call `@anthropic-ai/sdk` directly from a route — that breaks fixtures and replay silently.
+- **Citation deep links.** You build `app/api/sources/[id]/open` — mints a 60-second signed URL for the stored document and redirects to `{url}#page=N`. Lane B's citation chips depend on it (Journey 1.9).
+- **Voice fallback.** If Lane E is not running, you also own `app/api/voice/upload`: accept a browser recording, store it privately, create a `Source` with `kind: 'audio'`. Lane B provides the button.
 **Never touch:** `lib/contracts.ts`, `fixtures/**`, `components/**`, `app/(app)/**`, `lib/safety/**`.
 
 ---

@@ -70,7 +70,7 @@ if [ "$FAST" -eq 1 ]; then
 else
   bold "Types and tests"
   if [ ! -f package.json ]; then
-    bad "package.json missing — run ./scripts/bootstrap.sh first"
+    bad "package.json missing — run pnpm install from the repo root"
   else
     if pnpm typecheck >/dev/null 2>&1; then ok "typecheck"; else bad "typecheck failed — run: pnpm typecheck"; fi
     if pnpm test     >/dev/null 2>&1; then ok "tests";     else bad "tests failed — run: pnpm test"; fi
@@ -82,14 +82,18 @@ bold "Territory"
 # Warn when a change spans two lanes' directories — usually a boundary breach.
 CHANGED=$(git diff --name-only HEAD 2>/dev/null || true)
 count() { echo "$CHANGED" | grep -cE "$1" || true; }
-A=$(count '^(lib/ai/|app/api/)'); B=$(count '^(app/\(app\)/|components/)')
-C=$(count '^lib/(safety|detectors|copy)/'); D=$(count '^(demo/|scripts/|\.github/)')
+# E is matched before A on purpose: app/api/voice/** belongs to E, the rest of app/api/** to A.
+E=$(count '^(lib/voice/|app/api/voice/)')
+A=$(echo "$CHANGED" | grep -E '^(lib/ai/|app/api/)' | grep -vcE '^app/api/voice/' || true)
+B=$(count '^(app/\(app\)/|app/page\.tsx|app/layout\.tsx|app/globals\.css|app/favicon|components/|public/manifest\.json|public/icons/)')
+C=$(count '^lib/(safety|detectors|copy)/')
+D=$(count '^(demo/|scripts/|\.github/|vercel\.json|app/demo/|public/sw\.js|lib/modes/)')
 SPAN=0
-for n in $A $B $C $D; do [ "$n" -gt 0 ] && SPAN=$((SPAN+1)); done
+for n in $A $B $C $D $E; do [ "$n" -gt 0 ] && SPAN=$((SPAN+1)); done
 if [ "$SPAN" -le 1 ]; then
   ok "changes confined to one lane"
 else
-  printf '  \033[33m!\033[0m changes span %s lane territories (A:%s B:%s C:%s D:%s)\n' "$SPAN" "$A" "$B" "$C" "$D"
+  printf '  \033[33m!\033[0m changes span %s lane territories (A:%s B:%s C:%s D:%s E:%s)\n' "$SPAN" "$A" "$B" "$C" "$D" "$E"
   echo "      Only the integrator crosses boundaries. If you are not Lane D, split this."
 fi
 

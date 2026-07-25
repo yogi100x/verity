@@ -55,8 +55,8 @@ Run this first every single time. If any step fails, stop and report; the rest o
 | 1.18 | Check every gap against the documents | **Zero fabricated gaps.** A gap referring to something that doesn't exist is a hard fail — worse than a missing gap. | A | |
 | 1.19 | Click **Generate CHC Evidence Pack** | Document renders, organised by the 12 named domains | A+B | |
 | 1.20 | Find the *Drug therapies and medication* domain | The furosemide conflict appears here | A | |
-| 1.21 | Find the well-managed-need flag | Para 162 quoted **verbatim**, in monospace, with its paragraph number | C | |
-| 1.22 | Check that paragraph number against the real framework | It matches. A wrong citation is the single most damaging possible failure. | C | |
+| 1.21 | Find the well-managed-need flag | **PG 23.2 quoted verbatim** as the primary citation, para 162 as support — monospace, with references | C | |
+| 1.22 | Check both references against the real documents | They match word for word. A wrong citation is the single most damaging possible failure. | C | |
 | 1.23 | Click **Generate GP Appointment Brief** | A **visibly different** one-page artefact appears, from the same data, quickly | A+B | |
 | 1.24 | Compare the two artefacts side by side | Same underlying facts, different structure, different audience. This is the "one engine, any gatekeeper" proof. | B | |
 | 1.25 | Try to print before ticking the review box | Print button disabled, labelled *"Review to unlock printing"* | B | |

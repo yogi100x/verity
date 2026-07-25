@@ -6,7 +6,9 @@
 
 **The stack is frozen.** Tailwind only — **no component library**. shadcn/ui and every equivalent are explicitly rejected: the design system is bespoke and specified to hex values, and a library's defaults are the templated look we are avoiding. Hand-build against the tokens. Do not run `pnpm add`.
 
-**Branch:** `lane/b`. **Territory:** `app/(app)/**`, `components/**`, `app/globals.css`, `app/layout.tsx`.
+**Branch:** `lane/b`. **Territory:** `app/(app)/**`, `app/page.tsx`, `app/layout.tsx`, `app/globals.css`, `app/favicon.ico`, `components/**`, `public/manifest.json`, `public/icons/**`.
+
+The scaffold's placeholder `app/page.tsx` is yours — replace it with the landing page. Do not create `app/(app)/page.tsx` for the root route; it would collide.
 **Never touch:** `lib/contracts.ts`, `lib/ai/**`, `app/api/**`, `lib/safety/**`, `fixtures/**`.
 
 **You need no API key and no database.** Everything renders from `fixtures/margaret.json`. This is deliberate — you cannot be blocked by any other lane. If you find yourself waiting for Lane A, you have taken a wrong turn.

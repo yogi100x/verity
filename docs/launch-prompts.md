@@ -12,15 +12,12 @@ On your own machine only:
 
 ```bash
 cd verity
-./scripts/bootstrap.sh
+pnpm install && pnpm test
 ```
 
-**It must end GREEN.** If the keystone test fails, every lane would build against a lie. Fix it before launching anything. Then:
+**All 20 tests must be green.** If the keystone test fails, every lane would build against a lie. Fix it before launching anything.
 
-```bash
-git add -A && git commit -m "contract: freeze" && git push
-# GitHub → Settings → Branches → protect main
-```
+The repo is public and `main` is already protected (no force-pushes, no deletions). Content rules — frozen contract, no judgement fields, territory — are enforced by the husky hooks that `pnpm install` wires automatically. **Do not run `scripts/bootstrap.sh`; the scaffold is committed and the script exits early by design.**
 
 ---
 
@@ -28,13 +25,11 @@ git add -A && git commit -m "contract: freeze" && git push
 
 ```bash
 git clone https://github.com/yogi100x/verity.git && cd verity
-pnpm install
+pnpm install                   # also installs the husky hooks
 cp .env.example .env.local     # lanes B and C can leave it empty
-git checkout -b lane/<a|b|c>
+git checkout -b lane/<a|b|c|d|e>
 claude
 ```
-
-Only the orchestrator runs `bootstrap.sh` — once, on `main`, before any lane clones.
 
 ---
 
@@ -64,7 +59,7 @@ Only the orchestrator runs `bootstrap.sh` — once, on `main`, before any lane c
 
 > You are Lane B on the Verity build. Read these five files in full before writing anything: `docs/lanes/lane-b-surface.md` (your brief), `docs/design.md`, `prd.md`, `docs/user-journey.md`, `docs/stack-freeze.md`. Then open `demo/design-showcase.html` in a browser — that is your visual target.
 >
-> Your territory is `app/(app)/**`, `components/**`, `app/globals.css`, `app/layout.tsx`, `public/manifest.json`, `public/icons/**`. You must not edit anything outside it — not `lib/contracts.ts`, not `lib/ai/**`, not `app/api/**`, not `lib/safety/**`, not `public/sw.js` (Lane D owns the service worker).
+> Your territory is `app/(app)/**`, `app/page.tsx`, `app/layout.tsx`, `app/globals.css`, `app/favicon.ico`, `components/**`, `public/manifest.json`, `public/icons/**`. The existing `app/page.tsx` is the scaffold placeholder — replace it with the landing page. You must not edit anything outside your territory — not `lib/contracts.ts`, not `lib/ai/**`, not `app/api/**`, not `lib/safety/**`, not `public/sw.js` (Lane D owns the service worker).
 >
 > You need no API key and no database. Everything renders from `fixtures/margaret.json`. That is deliberate: you cannot be blocked by another lane. If you find yourself waiting on Lane A, you have taken a wrong turn.
 >

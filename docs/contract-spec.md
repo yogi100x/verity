@@ -1,6 +1,6 @@
 # Contract Spec — type this at hour 0, then freeze
 
-**This file is the single source of truth every lane codes against.** It is not aspirational: at kickoff the orchestrator types these two files, commits them to `main`, and protects them. From that moment no agent may modify them without the orchestrator explicitly unfreezing.
+**The authoritative files are `lib/contracts.ts`, `supabase/migrations/0001_init.sql` and `fixtures/templates.json` — all committed, tested and frozen.** This document explains them; where any inline snippet here disagrees with those files, **the files win**. No agent may modify them without the orchestrator explicitly unfreezing.
 
 **Why this matters.** Three agents building in parallel are only genuinely parallel if none of them waits for another. They achieve that by coding against *this contract* and against `fixtures.json` — never against each other's output. When Lane A finally lands real extraction, Lane B changes one import. If the contract drifts mid-build, that promise breaks and you get a 2am merge disaster.
 
@@ -186,6 +186,9 @@ export const Fact = z.object({
   valid_to: z.string().nullable(),
   supporting_claim_ids: z.array(z.string().uuid()),
   conflict_id: z.string().uuid().nullable(),
+  /** Set by the supersession pass (stretch S6). Superseded facts stay
+   *  visible and keep their citations. */
+  superseded_by: z.string().uuid().nullable().default(null),
 });
 export type Fact = z.infer<typeof Fact>;
 
@@ -417,6 +420,7 @@ create table facts (
   valid_to date,
   supporting_claim_ids uuid[] not null default '{}',
   conflict_id uuid,
+  superseded_by uuid references facts(id),
   created_at timestamptz not null default now(),
   -- A fact may only lack supporting claims if it is explicitly unknown.
   constraint fact_needs_support
@@ -521,7 +525,7 @@ create policy p_templates on artifact_templates for select using (true);
 
 ## 3. `fixtures/margaret.json`
 
-Hand-written at hour 0 by the orchestrator. It is a complete, realistic `CaseSnapshot` — four sources, ~30 claims, ~20 facts, one furosemide conflict with three claim ids, three gaps, and both artefacts fully rendered.
+Committed and verified. A complete, realistic `CaseSnapshot`: **4 sources, 17 claims (16 verified, 1 deliberately dropped), 10 facts, 1 furosemide conflict with three claim ids, 4 gaps, and both artefacts.**
 
 **This file is what makes the build parallel.** Lane B builds every screen against it with no network, no database, and no API key. Lane C tests detectors against it. Lane D uses it as the `replay` payload.
 
