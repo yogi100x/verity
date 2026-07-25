@@ -17,16 +17,21 @@
  * through `Source.parse` and `CaseSnapshot.parse`. The extension is
  * Zod-validated end to end — there is no `as`, no cast and no hand-built
  * object escaping the contract — and no file under `fixtures/` is mutated or
- * written to. When the fixture is seeded, `CARE_LOG_TRANSCRIPT` is deleted
+ * written to. When the fixture is seeded, the derivation below is deleted
  * and the source is read straight from the snapshot; nothing else changes.
  *
- * `CARE_LOG_TRANSCRIPT` is the ACTUAL text of `demo/documents/05-care-log.md`,
- * flattened as an OCR transcript would be (line wraps rejoined, nothing else
- * altered). Testing against an abridged paraphrase would prove nothing about
- * the document the demo actually runs on — in particular it would hide both
- * the canonical Wed 08/07 hit and the deliberate Sat 11/07 near-miss.
+ * `CARE_LOG_TRANSCRIPT` is derived AT TEST TIME from the actual text of
+ * `demo/documents/05-care-log.md` (the indented log block, line wraps
+ * rejoined as an OCR transcript would be — nothing else altered), so it can
+ * never drift from the document the demo actually runs on. A hard-coded
+ * copy or an abridged paraphrase would prove nothing about that document —
+ * in particular it would hide both the canonical Wed 08/07 hit and the
+ * deliberate Sat 11/07 near-miss. Reading a repo doc at test time is the
+ * same sanctioned test-only I/O pattern as lib/copy's prd.md check.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { CaseSnapshot, Source } from '../../contracts';
 import { ChcDomain, ChcLevel } from '../../contracts';
@@ -39,29 +44,18 @@ import {
   type WellManagedFlag,
 } from '../well_managed';
 
-const CARE_LOG_TRANSCRIPT =
-  'ELMFIELD HOME CARE — DAILY VISIT LOG. Client: M. Ellis, 14 Elmfield Road. ' +
-  'Week commencing: 06/07/2026. ' +
-  'Mon 06/07 0800 Assisted with washing and dressing. Prompted morning medication. ' +
-  'Breakfast prepared. Settled. ' +
-  '1900 Evening call. Prompted medication. No concerns. ' +
-  'Tue 07/07 0800 Assisted wash/dress. Prompted meds. Client reports poor night. ' +
-  'Ankles swollen. ' +
-  '1900 Evening call. Prompted meds. Settled overnight, no incidents reported. ' +
-  'Wed 08/07 0800 Assisted wash/dress. Hoist used for transfer to chair — client ' +
-  'unsteady this morning. Prompted meds. ' +
-  '1900 PRN lorazepam 0.5mg administered at 2130 for agitation. ' +
-  'Settled overnight, no incidents. ' +
-  'Thu 09/07 0800 Assisted wash/dress. Prompted meds. Client mentioned feeling ' +
-  'wobbly on stairs. ' +
-  '1900 Evening call. Prompted meds. Slept well, no concerns. ' +
-  'Fri 10/07 0800 Assisted wash/dress. Prompted meds. Two-hourly repositioning ' +
-  'continued per care plan. ' +
-  '1900 PRN lorazepam 0.5mg administered 2200. Settled. ' +
-  'Sat 11/07 0800 Assisted wash/dress. Prompted meds. Good day, no concerns, ' +
-  'client in good spirits. ' +
-  '1900 Evening call. Prompted meds. Settled. ' +
-  'Carer signature: J. Adeyemi';
+// jsdom's `import.meta.url` is not a file: URL, so resolve from the vitest
+// root (the repo root), as lib/copy's prd.md test does.
+const CARE_LOG_DOC = readFileSync(
+  join(process.cwd(), 'demo/documents/05-care-log.md'),
+  'utf8',
+);
+
+const CARE_LOG_TRANSCRIPT = CARE_LOG_DOC.split('\n')
+  .filter((line) => line.startsWith('    ') && line.trim().length > 0)
+  .map((line) => line.trim())
+  .filter((line) => !/^-+$/.test(line))
+  .join(' ');
 
 function syntheticSource(id: string, title: string, transcript: string): Source {
   return Source.parse({
