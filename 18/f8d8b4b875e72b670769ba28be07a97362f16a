@@ -1,0 +1,38 @@
+app/(app)/gaps/page.tsx
+  s_afabf214a6fe93::t_3239dbf6f20a5a 58
+  s_afabf214a6fe93::t_95497b7f3239a8 4,6,28-32,37-38,47-57
+  s_afabf214a6fe93::t_4155fe7d6ccef0 33-36
+components/letters/LetterModal.tsx
+  s_afabf214a6fe93::t_f391fe85d5c361 54-57,60-64
+  s_afabf214a6fe93::t_f07e067acbc1bd 218
+components/gaps/ClockCard.tsx
+  s_afabf214a6fe93::t_9d2ba9ff58c7fe 58-60
+  s_afabf214a6fe93::t_16598c5960b73c 1-57,61-63
+components/gaps/__tests__/clock-card.test.tsx
+  s_afabf214a6fe93::t_0c422d701746bf 184-187,197,204
+  s_afabf214a6fe93::t_00a624125d9a29 242-245,247-252
+  s_afabf214a6fe93::t_9ac44083a7234f 23-30,70
+  s_afabf214a6fe93::t_d6a0d2fbb3e5b0 1-17,19-22,72-129,135-183,188-196,198-203,205-207
+  s_afabf214a6fe93::t_53cfa31bfe5048 18,31-69,71
+  s_afabf214a6fe93::t_f50ac65e2bdcec 209-241,246
+  s_afabf214a6fe93::t_3f458b804eb5c1 130-134
+  s_afabf214a6fe93::t_e89bcd39ffdedb 208
+components/letters/__tests__/letter-modal.test.tsx
+  s_afabf214a6fe93::t_6d1082957c3612 81-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "18f8d8b4b875e72b670769ba28be07a97362f16a",
+  "prompts": {},
+  "sessions": {
+    "s_afabf214a6fe93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c999a24-05c7-418e-a055-0e42e33d7f6d",
+        "model": "claude-fable-5"
+      },
+      "human_author": null
+    }
+  }
+}
