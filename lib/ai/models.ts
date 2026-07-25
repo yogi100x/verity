@@ -12,8 +12,12 @@
  *     - Assistant-turn prefills return 400. We use forced strict tool use.
  *
  *   Haiku 4.5 (budget family)
- *     - `thinking: {type: 'enabled', budget_tokens: N}`, and N < max_tokens.
  *     - Has no `output_config.effort`; sending it is an error.
+ *     - `thinking: {type: 'enabled', budget_tokens: N}` is its dialect in
+ *       general — but NOT here, because every Lane A call forces a tool, and
+ *       the API returns 400 for enabled-type thinking combined with a forced
+ *       tool_choice (proven live; the verbatim error is quoted inside
+ *       `modelParams`). So Haiku requests omit `thinking` entirely.
  *
  * Also worth stating because it shapes the whole extraction design: the
  * citations API and `output_config.format` are mutually incompatible and
@@ -43,16 +47,12 @@ const FAMILY: Record<ModelId, ThinkingFamily> = {
   'claude-haiku-4-5': 'budget',
 };
 
-/** The API floor for `thinking.budget_tokens` on budget-family models. */
-export const MIN_THINKING_BUDGET = 1024;
-
-/** The slice of a request body that varies by model. */
+/** The slice of a request body that varies by model. `thinking` is ABSENT
+ *  for budget-family models — see the comment inside `modelParams`. */
 export interface ModelParams {
   readonly model: ModelId;
   readonly max_tokens: number;
-  readonly thinking:
-    | { readonly type: 'adaptive' }
-    | { readonly type: 'enabled'; readonly budget_tokens: number };
+  readonly thinking?: { readonly type: 'adaptive' };
   readonly output_config?: { readonly effort: Effort };
 }
 
@@ -71,22 +71,24 @@ export function modelParams(
   const { maxTokens } = opts;
 
   if (FAMILY[model] === 'budget') {
-    // budget_tokens must be STRICTLY LESS than max_tokens and at least 1024.
-    // Both bounds are 400s, and both are reachable: clamping up to the 1024
-    // floor without checking max_tokens is how you send budget >= max_tokens.
-    if (maxTokens <= MIN_THINKING_BUDGET) {
-      throw new RangeError(
-        `modelParams: ${model} needs max_tokens greater than ${MIN_THINKING_BUDGET} ` +
-          `(the thinking-budget floor), got ${maxTokens}. budget_tokens must be ` +
-          'strictly less than max_tokens.',
-      );
-    }
-    // Half leaves room for the answer; never below the floor, never at max.
-    const budget = Math.max(MIN_THINKING_BUDGET, Math.floor(maxTokens / 2));
+    // NO thinking parameter at all, and the reason is a live 400, verbatim:
+    //
+    //   "Thinking may not be enabled when tool_choice forces tool use."
+    //
+    // Every Lane A call goes through callForcedTool, which always forces a
+    // tool — that is the pipeline's whole design — so the budget dialect
+    // (`thinking: {type:'enabled', budget_tokens}`) this registry originally
+    // encoded was unusable here: the API rejects enabled-type thinking
+    // combined with a forced tool_choice. Discovered on the first real Haiku
+    // call (date resolution), which is exactly why dead code should get a
+    // live call before anything is built on it. On a pre-adaptive model,
+    // omitting `thinking` means no extended thinking, which is legal under
+    // forced tool use and right for the narrow structured tasks Haiku is
+    // used for. If an unforced Haiku call ever exists, budget_tokens can
+    // return — for that call shape only.
     return {
       model,
       max_tokens: maxTokens,
-      thinking: { type: 'enabled', budget_tokens: budget },
     };
   }
 
