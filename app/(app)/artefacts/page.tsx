@@ -5,6 +5,8 @@ import { ArtefactCard } from "@/components/artefacts/ArtefactCard";
 
 type ArtefactRow = { template: ArtifactTemplate; artifact: Artifact };
 
+export const metadata = { title: "Artefacts — Verity" };
+
 export default async function ArtefactsPage() {
   const caseId = await getActiveCaseId();
   const templates = getTemplates();

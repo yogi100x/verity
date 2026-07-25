@@ -7,7 +7,11 @@
 
 import { getActiveCaseId } from "@/components/data/activeCase";
 import { timelineEvents } from "@/components/data/dal";
-import { TimelineList } from "@/components/timeline/TimelineList";
+import { TimelineFilters } from "@/components/timeline/TimelineFilters";
+
+// Unique per-route title (NHS service manual: every page names itself so
+// screen-reader users and tab-jugglers know where they are).
+export const metadata = { title: "Timeline — Verity" };
 
 export default async function TimelinePage() {
   const caseId = await getActiveCaseId();
@@ -16,7 +20,7 @@ export default async function TimelinePage() {
   return (
     <div>
       <h1 className="text-title font-semibold text-ink">Timeline</h1>
-      <TimelineList events={events} />
+      <TimelineFilters events={events} />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 /**
  * Renders the CHC Checklist-to-decision clock (lib/detectors/chc_clock.ts)
- * plus a "Draft chase letter" button that opens the existing S3 LetterModal
+ * plus a "Prepare follow-up letter" button that opens the existing S3 LetterModal
  * with the pre-generated chase letter (docs/lanes/lane-b-surface.md).
  *
  * Mirrors GapCard's structure exactly: client component, solid <Card>
@@ -51,12 +51,12 @@ export function ClockCard({ statement, letter }: ClockCardProps) {
 
       <div className="mt-4">
         <Button id={triggerId} variant="secondary" onClick={() => setIsLetterOpen(true)}>
-          Draft chase letter
+          Prepare follow-up letter
         </Button>
       </div>
 
       {isLetterOpen && (
-        <LetterModal letter={letter} onClose={closeLetter} title="Draft chase letter" />
+        <LetterModal letter={letter} onClose={closeLetter} title="Prepare follow-up letter" />
       )}
     </Card>
   );

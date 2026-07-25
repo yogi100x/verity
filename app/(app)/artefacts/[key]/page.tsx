@@ -4,6 +4,24 @@ import { getActiveCaseId } from "@/components/data/activeCase";
 import { artifactView, getCase, getTemplates } from "@/components/data/dal";
 import { ArtefactDocument } from "@/components/artefacts/ArtefactDocument";
 
+/**
+ * Per-pack title, derived from the template's own title — never hand-typed —
+ * so the browser tab reads "After the hospital stay … — Verity" rather than
+ * a generic label, and a third gatekeeper template names its own tab with no
+ * change here. An invalid key falls through to the page's own notFound().
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ key: string }>;
+}) {
+  const { key } = await params;
+  const parsed = TemplateKey.safeParse(key);
+  if (!parsed.success) return { title: "Artefacts — Verity" };
+  const template = getTemplates().find((candidate) => candidate.key === parsed.data);
+  return { title: template ? `${template.title} — Verity` : "Artefacts — Verity" };
+}
+
 export default async function ArtefactPage({
   params,
 }: {

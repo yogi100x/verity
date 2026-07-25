@@ -3,6 +3,8 @@ import { conflictViews } from "@/components/data/dal";
 import { ConflictCard } from "@/components/conflicts/ConflictCard";
 import { GhostCard } from "@/components/ui/GhostCard";
 
+export const metadata = { title: "Conflicts — Verity" };
+
 export default async function ConflictsPage() {
   const caseId = await getActiveCaseId();
   const conflicts = conflictViews(caseId);

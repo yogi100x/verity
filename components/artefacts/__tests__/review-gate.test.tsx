@@ -11,8 +11,6 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReviewGate } from "../ReviewGate";
 
-const TEST_PERSON_ID = "11111111-1111-4111-8111-111111111111";
-
 function Harness() {
   const [reviewed, setReviewed] = useState(false);
   const [reviewerName, setReviewerName] = useState("");
@@ -22,7 +20,6 @@ function Harness() {
       onReviewedChange={setReviewed}
       reviewerName={reviewerName}
       onReviewerNameChange={setReviewerName}
-      personId={TEST_PERSON_ID}
     />
   );
 }
@@ -71,5 +68,15 @@ describe("ReviewGate", () => {
   it("the gate carries the no-print class — it never appears on a printed page", () => {
     const { container } = render(<Harness />);
     expect(container.querySelector(".no-print")).toBeInTheDocument();
+  });
+
+  it("renders no mic control and takes no personId prop — the recording it triggered saved an unrelated voice note, not the reviewer's name", () => {
+    render(<Harness />);
+    expect(screen.queryByRole("button", { name: /record|voice|mic/i })).not.toBeInTheDocument();
+
+    // Only the "Print" button remains — the gate has exactly one control
+    // beside the name field and the checkbox.
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Print" })).toBeInTheDocument();
   });
 });
