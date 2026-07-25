@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Verity — design showcase</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,560;9..144,680&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF7F2; --surface:#FFFFFF;
+    --ink:#1C1B1A; --ink-2:#55504A; --hairline:#E7E1D8; --brand:#14453D;
+    --cite-fill:#E4EFEC; --cite-border:#A9C9C2; --cite-text:#14453D;
+    --unv-fill:#FBEADD;  --unv-border:#E8B98C;  --unv-text:#9A4A15;
+    --con-fill:#FFF4D6;  --con-border:#E0B94A;  --con-text:#7A5C05;
+    --emerg:#B3261E; --emerg-fill:#FDEDEC;
+    --serif:'Fraunces',Iowan Old Style,Georgia,serif;
+    --sans:'Public Sans',-apple-system,'Segoe UI',Roboto,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html{font-size:18px}
+  @media(max-width:480px){html{font-size:20px}}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+       font-weight:400;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:70rem;margin:0 auto;padding:0 1.5rem}
+  section{padding:4rem 0;border-bottom:1px solid var(--hairline)}
+  h1{font-family:var(--serif);font-weight:680;font-size:3.5rem;line-height:1.05;
+     letter-spacing:-.02em;margin:0 0 1.5rem}
+  h2{font-family:var(--sans);font-weight:600;font-size:1.25rem;line-height:1.35;
+     margin:0 0 2rem;color:var(--ink-2);text-transform:uppercase;letter-spacing:.08em;font-size:.8125rem}
+  h3{font-family:var(--serif);font-weight:560;font-size:1.375rem;line-height:1.3;margin:0 0 .75rem}
+  p{margin:0 0 1rem;max-width:38rem}
+  .lede{font-size:1.125rem;color:var(--ink-2);max-width:34rem}
+  .mono{font-family:var(--mono);font-size:.875rem;line-height:1.55}
+  .mono-s{font-family:var(--mono);font-weight:500;font-size:.75rem;line-height:1.4}
+
+  /* ---------- banner ---------- */
+  .banner{background:var(--emerg-fill);color:var(--emerg);font-size:.875rem;
+          padding:.75rem 1.5rem;text-align:center;border-bottom:1px solid #F5D9D7}
+  .banner strong{font-weight:700}
+
+  /* ---------- provenance chips ---------- */
+  .chip{display:inline-flex;align-items:center;gap:.5rem;min-height:32px;
+        padding:.25rem .625rem;border-radius:4px;font-weight:600;font-size:.8125rem;
+        border:1px solid;cursor:pointer;transition:filter 120ms ease-out}
+  .chip:hover{filter:brightness(.97)}
+  .chip-cite{background:var(--cite-fill);border-color:var(--cite-border);color:var(--cite-text)}
+  .chip-unv{background:var(--unv-fill);border-color:var(--unv-border);color:var(--unv-text)}
+  .chip .loc{font-family:var(--mono);font-weight:500;font-size:.75rem;opacity:.85}
+
+  .popover{background:var(--surface);border:1px solid var(--hairline);border-radius:12px;
+           padding:1rem 1.25rem;max-width:26rem;box-shadow:0 4px 24px rgba(28,27,26,.06)}
+  .quote{font-family:var(--mono);font-size:.875rem;line-height:1.55;
+         border-left:3px solid var(--brand);padding-left:.875rem;margin:0 0 .75rem;color:var(--ink)}
+  .popover .src{font-size:.8125rem;color:var(--ink-2);margin:0 0 .5rem}
+  .popover a{color:var(--brand);font-weight:600;font-size:.875rem;text-decoration:none}
+  .popover a:hover{text-decoration:underline}
+
+  /* ---------- conflict card ---------- */
+  .conflict{background:color-mix(in srgb,var(--con-fill) 55%,var(--surface));
+            border:1px solid var(--con-border);border-radius:12px;padding:2.5rem;
+            animation:rise 400ms cubic-bezier(.16,1,.3,1) both}
+  @keyframes rise{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+  .sources{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:1.5rem 0}
+  @media(max-width:640px){.sources{grid-template-columns:1fr}}
+  .source{background:var(--surface);border:1px solid var(--hairline);border-radius:8px;padding:1rem}
+  .source .name{font-weight:600;font-size:.875rem;margin-bottom:.25rem}
+  .source .loc{font-family:var(--mono);font-weight:500;font-size:.75rem;color:var(--ink-2);margin-bottom:.625rem}
+  .source .said{font-family:var(--mono);font-size:.8125rem;line-height:1.5;
+                background:var(--cite-fill);padding:.5rem .625rem;border-radius:4px}
+  .source.patient .said{background:var(--unv-fill)}
+  .resolve{font-weight:700;margin:1.5rem 0 .75rem;font-size:.9375rem}
+  .question{background:var(--surface);border:1px solid var(--brand);border-radius:8px;
+            padding:1rem 1.25rem;font-size:1.125rem;
+            animation:fade 400ms ease-out 400ms both}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+
+  /* ---------- timeline ---------- */
+  .tl{border-left:1px solid var(--hairline);padding-left:1.5rem;margin-left:.5rem}
+  .ev{position:relative;padding-bottom:2rem}
+  .ev::before{content:'';position:absolute;left:calc(-1.5rem - 5px);top:.5rem;
+              width:9px;height:9px;border-radius:50%;background:var(--brand)}
+  .ev .when{font-family:var(--mono);font-weight:500;font-size:.75rem;color:var(--ink-2)}
+  .ev .what{font-size:1.125rem;margin:.125rem 0 .5rem}
+  .ev.approx .when{border-bottom:1px dotted var(--ink-2);display:inline-block}
+  .ev.superseded .what{text-decoration:line-through;color:var(--ink-2)}
+  .ev .replaced{font-size:.8125rem;color:var(--ink-2);font-style:italic;margin-top:.25rem}
+
+  /* ---------- gap + ghost ---------- */
+  .gap{background:var(--surface);border:1px dashed var(--hairline);border-radius:12px;padding:1.5rem;margin-bottom:1rem}
+  .gap p{font-size:1.125rem;margin-bottom:.75rem}
+  .ghost{background:transparent;border:1px dashed var(--hairline);border-radius:12px;
+         padding:1.25rem;color:var(--ink-2);font-style:italic}
+
+  /* ---------- buttons ---------- */
+  .btn{font-family:var(--sans);font-weight:600;font-size:1rem;cursor:pointer;
+       border:1px solid transparent;transition:filter 120ms ease-out}
+  .btn:hover{filter:brightness(.94)}
+  .btn-p{background:var(--brand);color:#fff;border-radius:20px;height:56px;padding:0 2rem}
+  .btn-s{background:var(--surface);color:var(--ink);border-color:var(--hairline);
+         border-radius:12px;height:48px;padding:0 1.25rem}
+  .btn-t{background:none;color:var(--brand);padding:0;text-decoration:none}
+  .btn-t:hover{text-decoration:underline}
+  .btn-d{background:var(--hairline);color:var(--ink-2);border-radius:20px;height:56px;
+         padding:0 2rem;cursor:not-allowed}
+  .btn:focus-visible,.chip:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+
+  /* ---------- swatches / scale ---------- */
+  .grid{display:grid;gap:1rem}
+  .sw{display:grid;grid-template-columns:3.5rem 1fr;gap:1rem;align-items:center;font-size:.875rem}
+  .box{height:3.5rem;border-radius:8px;border:1px solid var(--hairline)}
+  .sw .hex{font-family:var(--mono);font-size:.75rem;color:var(--ink-2)}
+  .scale div{margin-bottom:.75rem}
+  .space{display:flex;align-items:flex-end;gap:.5rem}
+  .space i{display:block;background:var(--brand);width:1.5rem;border-radius:2px}
+
+  .halt{background:var(--emerg-fill);border:1px solid #F0C4C1;border-radius:12px;padding:2rem;max-width:34rem}
+  .halt h3{color:var(--emerg)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:3rem}
+  @media(max-width:768px){.cols{grid-template-columns:1fr;gap:2rem}}
+  .note{font-size:.8125rem;color:var(--ink-2);margin-top:.75rem}
+  @media(prefers-reduced-motion:reduce){*{animation-duration:100ms!important;transition-duration:100ms!important}}
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <strong>If someone is seriously ill or injured and their life is at risk, call 999.</strong>
+  Not sure how urgent it is? 111.nhs.uk. Verity does not assess urgency.
+</div>
+
+<div class="wrap">
+
+  <!-- LANDING -->
+  <section>
+    <h1>Your mum's paperwork,<br>finally saying one thing.</h1>
+    <p class="lede">Verity reads the letters, prescriptions and notes you already have, shows you where they disagree, and writes the document the next person needs — with every line traced back to the page it came from.</p>
+    <div style="display:flex;gap:1rem;align-items:center;margin-top:2rem;flex-wrap:wrap">
+      <button type="button" class="btn btn-p">Start with one document</button>
+      <a class="btn btn-t" href="#">See an example →</a>
+    </div>
+    <p class="note">Powered by Juno · Does not diagnose · You review everything before it leaves</p>
+  </section>
+
+  <!-- CONFLICT -->
+  <section>
+    <h2>Conflict card — the money moment</h2>
+    <div class="conflict">
+      <h3>Three sources disagree about the water tablet.</h3>
+      <div class="sources">
+        <div class="source">
+          <div class="name">Discharge summary</div>
+          <div class="loc">25 Jun 2026 · p.2 · line 14</div>
+          <div class="said">Furosemide 40mg — STOPPED prior to discharge due to worsening renal function.</div>
+        </div>
+        <div class="source">
+          <div class="name">Repeat prescription</div>
+          <div class="loc">03 Jul 2026 · item 2</div>
+          <div class="said">Furosemide 40mg tablets — 28 days</div>
+        </div>
+        <div class="source patient">
+          <div class="name">Margaret, in Juno</div>
+          <div class="loc">03 Jul 2026 · evening</div>
+          <div class="said">Still taking my water tablet at bedtime like always.</div>
+        </div>
+      </div>
+      <div class="resolve">This is now a question on the appointment brief:</div>
+      <div class="question">Ask whether the water tablet (furosemide) should have been restarted.</div>
+      <p class="note">Two of these are institutions. One is Margaret. Nobody had ever put them in the same room.</p>
+    </div>
+  </section>
+
+  <!-- PROVENANCE -->
+  <section>
+    <h2>Provenance — the visual thesis</h2>
+    <div class="cols">
+      <div>
+        <p><strong>Monospace means copied verbatim. Sans means prose we wrote.</strong> That single rule teaches itself in ten seconds and does more work than any icon.</p>
+        <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin:1.5rem 0">
+          <span class="chip chip-cite" tabindex="0">◎ Discharge summary <span class="loc">p.2 · l.14</span></span>
+          <span class="chip chip-unv" tabindex="0">○ You told us this — not from a document</span>
+        </div>
+        <p class="note">Every fact carries one or the other. Never both. Never neither — that state is unrepresentable in the type system.</p>
+      </div>
+      <div>
+        <div class="popover">
+          <p class="quote">“Furosemide 40mg — STOPPED prior to discharge due to worsening renal function. Do not restart without review.”</p>
+          <p class="src">Discharge summary, Bristol Royal Infirmary · page 2, line 14</p>
+          <a href="#">Open page 2 →</a>
+        </div>
+        <p class="note">Hover or focus, 320ms delay. Click opens the real page via a 60-second signed URL.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TIMELINE + GAPS -->
+  <section>
+    <div class="cols">
+      <div>
+        <h2>Timeline</h2>
+        <div class="tl">
+          <div class="ev approx">
+            <div class="when">around March 2024</div>
+            <div class="what">First noted breathlessness on stairs</div>
+            <span class="chip chip-unv" tabindex="0">○ You told us this</span>
+          </div>
+          <div class="ev superseded">
+            <div class="when">12 Mar 2026</div>
+            <div class="what">Continue furosemide 40mg daily</div>
+            <span class="chip chip-cite" tabindex="0">◎ Cardiology letter <span class="loc">p.1</span></span>
+            <div class="replaced">Replaced by the discharge summary, 25 June 2026.</div>
+          </div>
+          <div class="ev">
+            <div class="when">25 Jun 2026</div>
+            <div class="what">Discharged — furosemide stopped</div>
+            <span class="chip chip-cite" tabindex="0">◎ Discharge summary <span class="loc">p.2 · l.14</span></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h2>Gaps — statements about the record</h2>
+        <div class="gap">
+          <p>The discharge summary asks for a review of renal function within 7 days. No result is recorded after that date.</p>
+          <span class="chip chip-cite" tabindex="0">◎ Discharge summary <span class="loc">p.2 · l.24</span></span>
+          <div style="margin-top:1rem"><button type="button" class="btn btn-s">Draft request letter</button></div>
+        </div>
+        <div class="ghost">No review date recorded &nbsp;·&nbsp; <a class="btn btn-t" href="#">+ Add this</a></div>
+        <p class="note">Informational, never alarming. No warning icons — those belong to the 999 card alone.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- EMERGENCY -->
+  <section>
+    <h2>The one place red is allowed</h2>
+    <div class="halt">
+      <h3>Verity has stopped.</h3>
+      <p>Some of the words you used appear on the NHS's own list of symptoms that need immediate attention. <strong>We have not assessed you</strong> — we've simply stopped, because this isn't something to prepare an appointment for.</p>
+      <p style="font-weight:700;color:var(--emerg)">Call 999 now.</p>
+      <p class="note">Not sure? NHS 111 online can assess this. It is a registered medical device. We are not.</p>
+    </div>
+    <p class="note">Detection is a deterministic rule list that runs <em>before</em> any model call. Emergency red appears nowhere else in the product — not on validation, not on errors.</p>
+  </section>
+
+  <!-- TOKENS -->
+  <section>
+    <h2>Tokens</h2>
+    <div class="cols">
+      <div>
+        <h3>Colour</h3>
+        <div class="grid">
+          <div class="sw"><div class="box" style="background:#FAF7F2"></div><div>paper <span class="hex">#FAF7F2</span></div></div>
+          <div class="sw"><div class="box" style="background:#1C1B1A"></div><div>ink <span class="hex">#1C1B1A · 15.8:1</span></div></div>
+          <div class="sw"><div class="box" style="background:#55504A"></div><div>ink-secondary <span class="hex">#55504A · 6.1:1</span></div></div>
+          <div class="sw"><div class="box" style="background:#14453D"></div><div>brand <span class="hex">#14453D · 9.6:1</span></div></div>
+          <div class="sw"><div class="box" style="background:#E4EFEC;border-color:#A9C9C2"></div><div>citation <span class="hex">#E4EFEC / #A9C9C2</span></div></div>
+          <div class="sw"><div class="box" style="background:#FBEADD;border-color:#E8B98C"></div><div>unverified <span class="hex">#FBEADD / #E8B98C</span></div></div>
+          <div class="sw"><div class="box" style="background:#FFF4D6;border-color:#E0B94A"></div><div>conflict <span class="hex">#FFF4D6 / #E0B94A</span></div></div>
+          <div class="sw"><div class="box" style="background:#FDEDEC;border-color:#F0C4C1"></div><div>emergency — 999 only <span class="hex">#B3261E</span></div></div>
+        </div>
+      </div>
+      <div>
+        <h3>Type</h3>
+        <div class="scale">
+          <div style="font-family:var(--serif);font-weight:680;font-size:3.5rem;line-height:1.05">Display</div>
+          <div style="font-family:var(--serif);font-weight:560;font-size:1.375rem">Conflict header</div>
+          <div style="font-size:1.125rem">Body large — primary reading</div>
+          <div>Body — default</div>
+          <div style="font-size:.875rem;color:var(--ink-2)">Body small — secondary</div>
+          <div class="mono">Mono — verbatim quotes only</div>
+          <div class="mono-s">Mono small · p.2 · line 14</div>
+        </div>
+        <h3 style="margin-top:2rem">Space</h3>
+        <div class="space">
+          <i style="height:.25rem"></i><i style="height:.5rem"></i><i style="height:.75rem"></i>
+          <i style="height:1rem"></i><i style="height:1.5rem"></i><i style="height:2rem"></i>
+          <i style="height:3rem"></i><i style="height:4rem"></i><i style="height:6rem"></i>
+        </div>
+        <p class="note">0.25 · 0.5 · 0.75 · 1 · 1.5 · 2 · 3 · 4 · 6 rem. Nothing between.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- BUTTONS -->
+  <section style="border-bottom:none">
+    <h2>Controls</h2>
+    <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+      <button type="button" class="btn btn-p">Generate evidence pack</button>
+      <button type="button" class="btn btn-s">Add a document</button>
+      <a class="btn btn-t" href="#">See an example</a>
+      <button type="button" class="btn btn-d" disabled>Review to unlock printing</button>
+    </div>
+    <p class="note">A disabled control that doesn't say why it's disabled is a bug.</p>
+  </section>
+
+</div>
+</body>
+</html>

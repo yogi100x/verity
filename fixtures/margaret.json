@@ -1,0 +1,561 @@
+{
+  "person": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "display_name": "Margaret Ellis",
+    "access_basis": "person_consent"
+  },
+
+  "sources": [
+    {
+      "id": "50000000-0000-4000-8000-000000000001",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "kind": "pdf",
+      "title": "Discharge summary",
+      "storage_path": "demo/01-discharge-summary.pdf",
+      "transcript": "BRISTOL ROYAL INFIRMARY. Department of Cardiology, Ward 8B. DISCHARGE SUMMARY. Patient: Margaret ELLIS. DOB 14/03/1944. Admitted: 21/06/2026. Discharged: 25/06/2026. Consultant: Dr A. Okafor. DIAGNOSIS: 1. Decompensated heart failure (HFrEF) 2. Chronic kidney disease stage 3b 3. Type 2 diabetes mellitus. CLINICAL COURSE: Renal function deteriorated during admission (creatinine rose from 118 to 164 umol/L) and diuretic therapy was adjusted accordingly. MEDICATION CHANGES ON DISCHARGE: Bisoprolol 2.5mg once daily — CONTINUE. Furosemide 40mg — STOPPED prior to discharge due to worsening renal function. Do not restart without review. Dapagliflozin 10mg once daily — NEW, started 23/06/2026. Metformin 500mg twice daily — CONTINUE. ACTIONS FOR PRIMARY CARE: GP to review renal function and diuretic requirement within 7 days of discharge. Daily weights. Contact GP if weight rises more than 2kg over 3 days. FOLLOW-UP: Heart failure specialist nurse to contact within 2 weeks. Cardiology outpatient review in 3 months.",
+      "transcript_confidence": 0.98,
+      "author_member_id": null,
+      "created_at": "2026-07-20T09:12:00Z"
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000002",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "kind": "image",
+      "title": "Repeat prescription",
+      "storage_path": "demo/02-repeat-prescription.jpg",
+      "transcript": "ELMFIELD SURGERY. REPEAT PRESCRIPTION — PATIENT COPY. Mrs Margaret ELLIS. DOB 14/03/1944. Printed: 03/07/2026. Current repeat items: 1. Bisoprolol 2.5mg tablets 28 days. 2. Furosemide 40mg tablets 28 days. 3. Metformin 500mg tablets 56 days. 4. Atorvastatin 20mg tablets 28 days. 5. Amitriptyline 10mg tablets nocte 28 days. 6. Colecalciferol 800iu capsules 28 days. Last issued: 03/07/2026. Next review: not recorded.",
+      "transcript_confidence": 0.81,
+      "author_member_id": null,
+      "created_at": "2026-07-20T09:14:00Z"
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000003",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "kind": "pdf",
+      "title": "Cardiology clinic letter",
+      "storage_path": "demo/03-cardiology-letter.pdf",
+      "transcript": "BRISTOL ROYAL INFIRMARY. Department of Cardiology. 12 March 2026. Dear Dr Mensah, I reviewed Mrs Ellis in the heart failure clinic today. She remains stable on her current regimen. Exercise tolerance is approximately 100 metres on the flat before stopping for breath. Echocardiography today shows left ventricular ejection fraction of 40%, with moderate mitral regurgitation. Renal function is stable with creatinine 118 umol/L, eGFR 42. Please continue furosemide 40mg daily and bisoprolol 2.5mg daily. I would be grateful if you would review her in six months. Yours sincerely, Dr A. Okafor, Consultant Cardiologist.",
+      "transcript_confidence": 0.97,
+      "author_member_id": null,
+      "created_at": "2026-07-20T09:15:00Z"
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000004",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "kind": "juno_conversation",
+      "title": "Margaret's Juno history",
+      "storage_path": "demo/04-juno-history.json",
+      "transcript": "18 June 2026, evening: Very puffy round the ankles again today. Had to stop twice coming back from the shop. Slept sitting up. 26 June 2026, morning: Home from hospital yesterday. They were very good. Lots of new tablets and I'm not sure I've got them straight. 01 July 2026, evening: Breathing better than it was. Ankles still a bit puffy at night. 03 July 2026, evening: Still taking my water tablet at bedtime like always. Sarah asked about it on the phone. 09 July 2026, morning: Bit wobbly on the stairs this morning. Held on to the rail. Didn't tell Sarah, she worries. 16 July 2026, evening: Weight up a bit this week I think. The scales are in the bathroom and I don't always remember.",
+      "transcript_confidence": 1.0,
+      "author_member_id": null,
+      "created_at": "2026-07-20T09:16:00Z"
+    }
+  ],
+
+  "claims": [
+    {
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "source_id": "50000000-0000-4000-8000-000000000001",
+      "ontology_key": "medication.furosemide",
+      "subject": "furosemide",
+      "value": "40mg, stopped prior to discharge",
+      "quote": "Furosemide 40mg — STOPPED prior to discharge due to worsening renal function. Do not restart without review.",
+      "locator": { "page": 2, "char_start": 512, "char_end": 620, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-06-25",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000002",
+      "source_id": "50000000-0000-4000-8000-000000000002",
+      "ontology_key": "medication.furosemide",
+      "subject": "furosemide",
+      "value": "40mg, on active repeat, 28 days",
+      "quote": "Furosemide 40mg tablets 28 days",
+      "locator": { "page": 1, "char_start": 210, "char_end": 241, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-07-03",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000003",
+      "source_id": "50000000-0000-4000-8000-000000000004",
+      "ontology_key": "medication.furosemide",
+      "subject": "furosemide",
+      "value": "still taking it at bedtime",
+      "quote": "Still taking my water tablet at bedtime like always.",
+      "locator": { "page": null, "char_start": 388, "char_end": 439, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-07-03",
+      "date_precision": "exact",
+      "provenance": "user_stated",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000004",
+      "source_id": "50000000-0000-4000-8000-000000000003",
+      "ontology_key": "medication.furosemide",
+      "subject": "furosemide",
+      "value": "continue 40mg daily",
+      "quote": "Please continue furosemide 40mg daily and bisoprolol 2.5mg daily.",
+      "locator": { "page": 1, "char_start": 470, "char_end": 534, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-03-12",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000005",
+      "source_id": "50000000-0000-4000-8000-000000000001",
+      "ontology_key": "instruction.renal_review",
+      "subject": "renal function review",
+      "value": "within 7 days of discharge",
+      "quote": "GP to review renal function and diuretic requirement within 7 days of discharge.",
+      "locator": { "page": 2, "char_start": 760, "char_end": 839, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-06-25",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000006",
+      "source_id": "50000000-0000-4000-8000-000000000003",
+      "ontology_key": "instruction.cardiology_review",
+      "subject": "cardiology review",
+      "value": "in six months from 12 March 2026",
+      "quote": "I would be grateful if you would review her in six months.",
+      "locator": { "page": 1, "char_start": 536, "char_end": 593, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-03-12",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000007",
+      "source_id": "50000000-0000-4000-8000-000000000001",
+      "ontology_key": "diagnosis.heart_failure",
+      "subject": "heart failure",
+      "value": "decompensated, HFrEF",
+      "quote": "Decompensated heart failure (HFrEF)",
+      "locator": { "page": 1, "char_start": 210, "char_end": 245, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-06-25",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000008",
+      "source_id": "50000000-0000-4000-8000-000000000001",
+      "ontology_key": "medication.dapagliflozin",
+      "subject": "dapagliflozin",
+      "value": "10mg once daily, new",
+      "quote": "Dapagliflozin 10mg once daily — NEW, started 23/06/2026",
+      "locator": { "page": 2, "char_start": 625, "char_end": 679, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-06-23",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000009",
+      "source_id": "50000000-0000-4000-8000-000000000002",
+      "ontology_key": "medication.amitriptyline",
+      "subject": "amitriptyline",
+      "value": "10mg nocte, on active repeat",
+      "quote": "Amitriptyline 10mg tablets nocte 28 days",
+      "locator": { "page": 1, "char_start": 320, "char_end": 360, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-07-03",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000010",
+      "source_id": "50000000-0000-4000-8000-000000000002",
+      "ontology_key": "admin.medication_review",
+      "subject": "medication review date",
+      "value": "not recorded",
+      "quote": "Next review: not recorded.",
+      "locator": { "page": 1, "char_start": 420, "char_end": 446, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-07-03",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000011",
+      "source_id": "50000000-0000-4000-8000-000000000004",
+      "ontology_key": "chc.mobility",
+      "subject": "mobility",
+      "value": "unsteady on stairs, used handrail",
+      "quote": "Bit wobbly on the stairs this morning. Held on to the rail.",
+      "locator": { "page": null, "char_start": 500, "char_end": 558, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-07-09",
+      "date_precision": "exact",
+      "provenance": "user_stated",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000012",
+      "source_id": "50000000-0000-4000-8000-000000000004",
+      "ontology_key": "chc.drug_therapies",
+      "subject": "medication management",
+      "value": "uncertain which tablets to take after discharge",
+      "quote": "Lots of new tablets and I'm not sure I've got them straight.",
+      "locator": { "page": null, "char_start": 240, "char_end": 299, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-06-26",
+      "date_precision": "exact",
+      "provenance": "user_stated",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000013",
+      "source_id": "50000000-0000-4000-8000-000000000001",
+      "ontology_key": "instruction.daily_weights",
+      "subject": "daily weights",
+      "value": "contact GP if weight rises more than 2kg over 3 days",
+      "quote": "Daily weights. Contact GP if weight rises more than 2kg over 3 days.",
+      "locator": { "page": 2, "char_start": 841, "char_end": 908, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-06-25",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000014",
+      "source_id": "50000000-0000-4000-8000-000000000001",
+      "ontology_key": "referral.heart_failure_nurse",
+      "subject": "heart failure specialist nurse",
+      "value": "to contact within 2 weeks",
+      "quote": "Heart failure specialist nurse to contact within 2 weeks.",
+      "locator": { "page": 2, "char_start": 920, "char_end": 976, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-06-25",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000015",
+      "source_id": "50000000-0000-4000-8000-000000000003",
+      "ontology_key": "result.creatinine",
+      "subject": "creatinine",
+      "value": "118 umol/L, eGFR 42",
+      "quote": "Renal function is stable with creatinine 118 umol/L, eGFR 42.",
+      "locator": { "page": 1, "char_start": 408, "char_end": 468, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-03-12",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000016",
+      "source_id": "50000000-0000-4000-8000-000000000004",
+      "ontology_key": "observation.weight",
+      "subject": "weight",
+      "value": "self-reported increase, not measured",
+      "quote": "Weight up a bit this week I think.",
+      "locator": { "page": null, "char_start": 600, "char_end": 633, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-07-16",
+      "date_precision": "exact",
+      "provenance": "user_stated",
+      "verified_substring": true
+    },
+    {
+      "id": "c0000000-0000-4000-8000-000000000099",
+      "source_id": "50000000-0000-4000-8000-000000000002",
+      "ontology_key": "medication.bisoprolol",
+      "subject": "bisoprolol",
+      "value": "dose increased to 5mg",
+      "quote": "Bisoprolol increased to 5mg once daily following review",
+      "locator": { "page": 1, "char_start": 180, "char_end": 234, "ms_start": null, "ms_end": null },
+      "asserted_at": "2026-07-03",
+      "date_precision": "exact",
+      "provenance": "document_extracted",
+      "verified_substring": false
+    }
+  ],
+
+  "facts": [
+    {
+      "id": "f0000000-0000-4000-8000-000000000001",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "medication.furosemide",
+      "subject": "furosemide",
+      "canonical_value": "Disputed — three sources give different answers",
+      "provenance": "document_extracted",
+      "status": "disputed",
+      "valid_from": "2026-06-25",
+      "valid_to": null,
+      "supporting_claim_ids": [
+        "c0000000-0000-4000-8000-000000000001",
+        "c0000000-0000-4000-8000-000000000002",
+        "c0000000-0000-4000-8000-000000000003"
+      ],
+      "conflict_id": "c1000000-0000-4000-8000-000000000001",
+      "superseded_by": null
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000002",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "medication.furosemide",
+      "subject": "furosemide",
+      "canonical_value": "Continue 40mg daily",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2026-03-12",
+      "valid_to": "2026-06-25",
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000004"],
+      "conflict_id": null,
+      "superseded_by": "f0000000-0000-4000-8000-000000000001"
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000003",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "instruction.renal_review",
+      "subject": "renal function review",
+      "canonical_value": "Requested within 7 days of 25 June 2026",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2026-06-25",
+      "valid_to": null,
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000005"],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000004",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "result.creatinine",
+      "subject": "creatinine",
+      "canonical_value": "118 umol/L (12 Mar 2026); 164 umol/L during June admission",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2026-03-12",
+      "valid_to": null,
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000015"],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000005",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "result.renal_post_discharge",
+      "subject": "renal function after discharge",
+      "canonical_value": "No result recorded",
+      "provenance": "unknown",
+      "status": "unknown",
+      "valid_from": null,
+      "valid_to": null,
+      "supporting_claim_ids": [],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000006",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "chc.mobility",
+      "subject": "mobility",
+      "canonical_value": "Unsteady on stairs, uses handrail (self-reported)",
+      "provenance": "user_stated",
+      "status": "confirmed",
+      "valid_from": "2026-07-09",
+      "valid_to": null,
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000011"],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000007",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "chc.drug_therapies",
+      "subject": "medication management",
+      "canonical_value": "Reports uncertainty about her regimen after discharge",
+      "provenance": "user_stated",
+      "status": "confirmed",
+      "valid_from": "2026-06-26",
+      "valid_to": null,
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000012"],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000008",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "medication.amitriptyline",
+      "subject": "amitriptyline",
+      "canonical_value": "10mg nocte, on active repeat, absent from discharge summary",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2026-07-03",
+      "valid_to": null,
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000009"],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000009",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "diagnosis.heart_failure",
+      "subject": "heart failure",
+      "canonical_value": "Decompensated heart failure (HFrEF), LVEF 40%",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2026-03-12",
+      "valid_to": null,
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000007"],
+      "conflict_id": null,
+      "superseded_by": null
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000010",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "instruction.cardiology_review",
+      "subject": "cardiology review",
+      "canonical_value": "Due September 2026, no appointment recorded",
+      "provenance": "document_extracted",
+      "status": "confirmed",
+      "valid_from": "2026-03-12",
+      "valid_to": null,
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000006"],
+      "conflict_id": null,
+      "superseded_by": null
+    }
+  ],
+
+  "conflicts": [
+    {
+      "id": "c1000000-0000-4000-8000-000000000001",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_key": "medication.furosemide",
+      "subject": "furosemide",
+      "claim_ids": [
+        "c0000000-0000-4000-8000-000000000001",
+        "c0000000-0000-4000-8000-000000000002",
+        "c0000000-0000-4000-8000-000000000003"
+      ],
+      "generated_question": "Three sources disagree about the water tablet (furosemide). Ask whether it should have been restarted.",
+      "resolution": "unresolved"
+    }
+  ],
+
+  "gaps": [
+    {
+      "id": "9a000000-0000-4000-8000-000000000001",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "detector": "instruction_without_result",
+      "statement": "The discharge summary asks for a review of renal function within 7 days of 25 June 2026. No result is recorded after that date.",
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000005"],
+      "suggested_next_document": "Blood test result from Elmfield Surgery, after 25 June 2026"
+    },
+    {
+      "id": "9a000000-0000-4000-8000-000000000002",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "detector": "review_date_passed",
+      "statement": "The March 2026 cardiology letter asks for review in six months. That falls due in September 2026 and no appointment is recorded.",
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000006"],
+      "suggested_next_document": "Cardiology outpatient appointment letter"
+    },
+    {
+      "id": "9a000000-0000-4000-8000-000000000003",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "detector": "medication_without_review",
+      "statement": "The repeat prescription printed 3 July 2026 records no medication review date.",
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000010"],
+      "suggested_next_document": "Medication review record from Elmfield Surgery"
+    },
+    {
+      "id": "9a000000-0000-4000-8000-000000000004",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "detector": "referral_without_outcome",
+      "statement": "The discharge summary records that a heart failure specialist nurse would make contact within 2 weeks. No contact is recorded.",
+      "supporting_claim_ids": ["c0000000-0000-4000-8000-000000000014"],
+      "suggested_next_document": "Heart failure nurse contact note"
+    }
+  ],
+
+  "artifacts": [
+    {
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "template_key": "chc_dst_pack_v1",
+      "user_verified": false,
+      "created_at": "2026-07-20T10:02:00Z",
+      "assertions": [
+        {
+          "id": "a5000000-0000-4000-8000-000000000001",
+          "artifact_id": "a0000000-0000-4000-8000-000000000001",
+          "slot_key": "drug_therapies.evidence",
+          "text": "Three sources give different accounts of whether furosemide 40mg is currently being taken. The discharge summary of 25 June 2026 records it as stopped. A repeat prescription printed 3 July 2026 lists it as an active item. Margaret's own Juno entry of 3 July 2026 states she is still taking it.",
+          "fact_ids": ["f0000000-0000-4000-8000-000000000001"],
+          "citation_verified": true
+        },
+        {
+          "id": "a5000000-0000-4000-8000-000000000002",
+          "artifact_id": "a0000000-0000-4000-8000-000000000001",
+          "slot_key": "drug_therapies.framework_note",
+          "text": "Practice Guidance note 23.2 states that where needs are being managed via medication, it may be more appropriate to reflect this in the Drug Therapies and Medication domain.",
+          "fact_ids": ["f0000000-0000-4000-8000-000000000007"],
+          "citation_verified": true
+        },
+        {
+          "id": "a5000000-0000-4000-8000-000000000003",
+          "artifact_id": "a0000000-0000-4000-8000-000000000001",
+          "slot_key": "mobility.evidence",
+          "text": "Margaret reported on 9 July 2026 that she was unsteady on the stairs and held on to the rail. No professional mobility assessment appears in the record.",
+          "fact_ids": ["f0000000-0000-4000-8000-000000000006"],
+          "citation_verified": true
+        },
+        {
+          "id": "a5000000-0000-4000-8000-000000000004",
+          "artifact_id": "a0000000-0000-4000-8000-000000000001",
+          "slot_key": "continence.evidence",
+          "text": "",
+          "fact_ids": [],
+          "citation_verified": false
+        }
+      ]
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "person_id": "00000000-0000-4000-8000-000000000001",
+      "template_key": "gp_brief_v1",
+      "user_verified": false,
+      "created_at": "2026-07-20T10:04:00Z",
+      "assertions": [
+        {
+          "id": "a5000000-0000-4000-8000-000000000011",
+          "artifact_id": "a0000000-0000-4000-8000-000000000002",
+          "slot_key": "reason",
+          "text": "Margaret came home from hospital on 25 June 2026 after treatment for heart failure. Her records disagree about one of her medicines, and two requested follow-ups are not recorded as having happened.",
+          "fact_ids": [
+            "f0000000-0000-4000-8000-000000000001",
+            "f0000000-0000-4000-8000-000000000003"
+          ],
+          "citation_verified": true
+        },
+        {
+          "id": "a5000000-0000-4000-8000-000000000012",
+          "artifact_id": "a0000000-0000-4000-8000-000000000002",
+          "slot_key": "questions",
+          "text": "Three sources disagree about the water tablet (furosemide). Ask whether it should have been restarted.",
+          "fact_ids": ["f0000000-0000-4000-8000-000000000001"],
+          "citation_verified": true
+        },
+        {
+          "id": "a5000000-0000-4000-8000-000000000013",
+          "artifact_id": "a0000000-0000-4000-8000-000000000002",
+          "slot_key": "medications",
+          "text": "Amitriptyline 10mg at night appears on the repeat prescription of 3 July 2026 but does not appear in the discharge summary.",
+          "fact_ids": ["f0000000-0000-4000-8000-000000000008"],
+          "citation_verified": true
+        }
+      ]
+    }
+  ],
+
+  "stats": {
+    "claims_extracted": 17,
+    "claims_dropped": 1
+  }
+}

@@ -1,0 +1,33 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# next
+.next/
+out/
+build/
+next-env.d.ts
+
+# env — never commit
+.env
+.env.local
+.env*.local
+
+# supabase local
+.branches
+.temp
+
+# recorded fixtures are committed deliberately (demo insurance),
+# but raw uploads are not
+demo/uploads/
+
+# os / editor
+.DS_Store
+*.pem
+.vercel
+.idea/
+.vscode/
+*.tsbuildinfo
+
+# test
+coverage/
