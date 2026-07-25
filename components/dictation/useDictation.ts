@@ -21,7 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { Source } from "@/lib/contracts";
 import type { Mode } from "@/lib/modes";
-import { ensureAnonSession } from "@/components/data/supabaseBrowser";
+import { ensureDemoAccess } from "@/components/data/supabaseBrowser";
 
 export type DictationErrorKind = "unsupported" | "denied" | "failed";
 
@@ -166,7 +166,7 @@ export function useDictation({ personId, title, mode, onSaved }: UseDictationOpt
     // the network call. A false result reuses the same honest "failed"
     // state as any other upload failure; the copy comes from
     // lib/copy/dictation via the caller, not re-typed here.
-    const signedIn = await ensureAnonSession();
+    const signedIn = await ensureDemoAccess();
     if (!signedIn) {
       if (mountedRef.current) setState({ status: "error", kind: "failed" });
       return;

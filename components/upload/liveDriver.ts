@@ -25,7 +25,7 @@
 
 import { z } from "zod";
 import { STAGE_LABELS, type UploadDriver } from "@/components/upload/useUploadSimulation";
-import { ensureAnonSession } from "@/components/data/supabaseBrowser";
+import { ensureDemoAccess } from "@/components/data/supabaseBrowser";
 
 const WireReport = z.object({
   claims: z.array(z.unknown()).optional(),
@@ -77,7 +77,7 @@ export function createLiveDriver(personId: string): UploadDriver {
     // is the browser's job, done here rather than left to the fetch to fail
     // on; a false result means no session could be created, so nothing is
     // posted and nothing is silently lost.
-    const signedIn = await ensureAnonSession();
+    const signedIn = await ensureDemoAccess();
     if (!signedIn) {
       report({
         stage: "failed",

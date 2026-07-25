@@ -11,7 +11,7 @@
  *  - an unsupported browser disables the button with the reason visible;
  *  - a failed upload says so, and never claims the recording was saved;
  *  - the microphone is released (every track stopped) once recording ends;
- *  - no session, no upload: when ensureAnonSession() resolves false, the
+ *  - no session, no upload: when ensureDemoAccess() resolves false, the
  *    recording ends in the same honest failed copy and fetch is never
  *    called (the route 401s without a held session anyway).
  */
@@ -30,8 +30,8 @@ import {
 // vi.mock factories are hoisted above every import in this file, including
 // the static import below, so the mock function must come from
 // vi.hoisted() (see components/data/__tests__/supabase-browser.test.ts).
-const { ensureAnonSession } = vi.hoisted(() => ({ ensureAnonSession: vi.fn() }));
-vi.mock("@/components/data/supabaseBrowser", () => ({ ensureAnonSession }));
+const { ensureDemoAccess } = vi.hoisted(() => ({ ensureDemoAccess: vi.fn() }));
+vi.mock("@/components/data/supabaseBrowser", () => ({ ensureDemoAccess }));
 
 const PERSON_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -125,8 +125,8 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   // Default: a session is already held, so every existing test below still
   // reaches the network call unchanged.
-  ensureAnonSession.mockReset();
-  ensureAnonSession.mockResolvedValue(true);
+  ensureDemoAccess.mockReset();
+  ensureDemoAccess.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -283,7 +283,7 @@ describe("MicButton", () => {
   });
 
   it("shows the failed copy and never calls fetch when no session can be established", async () => {
-    ensureAnonSession.mockResolvedValue(false);
+    ensureDemoAccess.mockResolvedValue(false);
     const { grantMic } = installSupportedBrowser();
 
     render(<MicButton personId={PERSON_ID} />);
@@ -364,7 +364,7 @@ describe("MicButton", () => {
 
     fireEvent.click(screen.getByRole("button", { name: MIC_STOP_LABEL }));
 
-    // The hook awaits ensureAnonSession() before fetch, so the request
+    // The hook awaits ensureDemoAccess() before fetch, so the request
     // itself starts a tick later than the click — wait for it to actually
     // be in flight (and resolveUpload captured) before moving focus.
     await waitFor(() => {

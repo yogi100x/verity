@@ -30,6 +30,32 @@ function getBrowserClient(): SupabaseClient | null {
 // session exists later invocations re-check getSession fresh.
 let inFlight: Promise<boolean> | null = null;
 
+let attachInFlight: Promise<void> | null = null;
+
+/**
+ * Ensure a session AND a demo care-access grant for it, in that order. The
+ * attach call closes the seed-from-a-terminal footgun (see
+ * app/demo/attach/route.ts) and is coalesced so many callers cost one
+ * request. Best-effort by design: if attaching fails, the write route's own
+ * 403 remains the authoritative, visible failure — nothing is hidden here.
+ */
+export async function ensureDemoAccess(): Promise<boolean> {
+  const signedIn = await ensureAnonSession();
+  if (!signedIn) return false;
+  if (attachInFlight === null) {
+    attachInFlight = (async () => {
+      try {
+        await fetch("/demo/attach", { method: "POST" });
+      } catch {
+        // Allow a later call to retry rather than caching the failure.
+        attachInFlight = null;
+      }
+    })();
+  }
+  await attachInFlight;
+  return true;
+}
+
 export async function ensureAnonSession(): Promise<boolean> {
   if (typeof window === "undefined") {
     return false;

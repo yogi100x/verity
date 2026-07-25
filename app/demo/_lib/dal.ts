@@ -217,6 +217,17 @@ export function deriveConsentRecordId(personId: string): string {
   return deriveDemoUuid('consent_record', personId);
 }
 
+/** Attached-carer rows are keyed on (person, member) — unlike the seeded
+ *  relationship, which is keyed on person alone — so any number of browser
+ *  sessions can each hold their own grant without fighting over one row. */
+export function deriveAttachedRelationshipId(personId: string, memberId: string): string {
+  return deriveDemoUuid('care_relationship', personId + ':' + memberId);
+}
+
+export function deriveAttachedConsentId(personId: string, memberId: string): string {
+  return deriveDemoUuid('consent_record', personId + ':' + memberId);
+}
+
 /* ========================= the demo carer ========================= */
 
 /**
@@ -378,6 +389,47 @@ export function seedPlan(
       'assertions',
       snapshot.artifacts.flatMap((a) => a.assertions),
     ),
+  ];
+}
+
+/**
+ * DEMO SURFACE ONLY (like everything under app/demo/**): grant the CURRENT
+ * session's member id access to the seeded demo person without touching any
+ * seeded data. Exists because the seed grants whichever member id ran it —
+ * a seed run from a terminal grants the env/derived uid, and the browser's
+ * own anonymous session then 403s on every live write. Attaching is
+ * additive: a second care_relationships row keyed on (person, member),
+ * upserted onto a deterministic id so re-running converges instead of
+ * duplicating. revokePlan matches on {person_id, role}, so Journey 4.4
+ * still empties attached carers' views too. A 'self' case has no carer to
+ * attach and gets an empty plan.
+ */
+export function attachPlan(snapshot: CaseSnapshot, carer: CarerIdentity): Plan {
+  if (relationshipRole(snapshot) === 'self') return [];
+  const personId = snapshot.person.id;
+  return [
+    upsert('care_relationships', [
+      {
+        id: deriveAttachedRelationshipId(personId, carer.memberId),
+        person_id: personId,
+        member_id: carer.memberId,
+        role: 'carer',
+        access_basis: snapshot.person.access_basis,
+        declared_name: carer.declaredName,
+        granted_at: SEED_TIMESTAMP,
+        revoked_at: null,
+      },
+    ]),
+    upsert('consent_records', [
+      {
+        id: deriveAttachedConsentId(personId, carer.memberId),
+        person_id: personId,
+        member_id: carer.memberId,
+        basis: snapshot.person.access_basis,
+        declared_name: carer.declaredName,
+        accepted_at: SEED_TIMESTAMP,
+      },
+    ]),
   ];
 }
 
