@@ -1,23 +1,30 @@
 {
-  "name": "verity-temp",
+  "name": "verity",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "vitest"
   },
   "dependencies": {
     "next": "16.2.11",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^3"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.29",
+    "@supabase/supabase-js": "^2.50",
+    "@supabase/ssr": "^0.10",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3"
   }
 }
