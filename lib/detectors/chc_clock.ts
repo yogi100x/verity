@@ -65,8 +65,17 @@ export interface ChcDeadline {
  *  midnight. Returns null for unparseable input so a malformed record can
  *  never silently become an epoch date. */
 function parseIsoDate(s: string): Date | null {
-  const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s + 'T00:00:00.000Z' : s;
-  const d = new Date(iso);
+  // ISO forms only. Anything else (free text like 'completed 10 July 2026')
+  // must return null rather than reach `new Date(s)`: V8 reads such strings
+  // as LOCAL time, so the same fact would count a different day on a UTC
+  // server than on a UTC+1 laptop. Rejecting it here lets `checklistDateFor`
+  // fall back to the fact's ISO `valid_from`, which is timezone-safe.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const d = new Date(s + 'T00:00:00.000Z');
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(s)) return null;
+  const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 

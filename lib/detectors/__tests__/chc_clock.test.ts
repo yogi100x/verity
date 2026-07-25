@@ -122,6 +122,20 @@ describe('chcDeadlines', () => {
       expect(chcDeadlines([fact], now)).toEqual([]);
     });
 
+    it('free-text canonical_value falls back to valid_from — never V8 local-time parsing', () => {
+      // 'new Date("completed 10 July 2026")'-style parsing is local-time in
+      // V8: on a UTC+1 machine the clock would report the 9th for a
+      // checklist done on the 10th, and a UTC server would disagree. The
+      // free text must be rejected so the ISO valid_from wins on every box.
+      const fact = checklistFact({
+        canonical_value: 'The NHS Continuing Healthcare Checklist was completed on 10 July 2026',
+        valid_from: '2026-07-10',
+      });
+      const [deadline] = chcDeadlines([fact], new Date('2026-07-25T00:00:00.000Z'));
+      expect(deadline!.checklist_date).toBe('2026-07-10');
+      expect(deadline!.days_elapsed).toBe(15);
+    });
+
     it('unparseable dates (canonical_value and valid_from both non-dates)', () => {
       const fact = checklistFact({
         canonical_value: 'not a date',
