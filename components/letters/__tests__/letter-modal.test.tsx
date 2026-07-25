@@ -78,6 +78,17 @@ describe("LetterModal", () => {
     expect(screen.getByRole("dialog", { name: "Draft request letter" })).toBeInTheDocument();
   });
 
+  it('titles the dialog "Draft request letter" by default', () => {
+    render(<LetterModal letter={expectedLetter} onClose={() => {}} />);
+    expect(screen.getByRole("dialog", { name: "Draft request letter" })).toBeInTheDocument();
+  });
+
+  it("uses the optional title prop as the dialog heading (chase-letter reuse)", () => {
+    render(<LetterModal letter={expectedLetter} onClose={() => {}} title="Draft chase letter" />);
+    expect(screen.getByRole("dialog", { name: "Draft chase letter" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Draft request letter" })).not.toBeInTheDocument();
+  });
+
   it("renders letter text matching draftRequestLetter's output for the fixture (journey 9.5/9.6)", () => {
     render(<LetterModal letter={expectedLetter} onClose={() => {}} />);
 
