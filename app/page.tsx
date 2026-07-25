@@ -25,6 +25,9 @@ export default function Home() {
           <LinkButton href="/dashboard" variant="primary">
             Start with one document
           </LinkButton>
+          <LinkButton href="/welcome" variant="secondary">
+            Set up a new record
+          </LinkButton>
           <LinkButton href="/timeline" variant="tertiary">
             See an example →
           </LinkButton>
