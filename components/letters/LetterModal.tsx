@@ -51,9 +51,17 @@ const RECIPIENT_LABELS: Readonly<Record<LetterRecipient, string>> = {
 export type LetterModalProps = {
   letter: RequestLetter;
   onClose: () => void;
+  /** Dialog heading. Defaults to "Draft request letter" so every existing
+   *  GapCard call site is unchanged; the CHC clock passes "Draft chase
+   *  letter" so the heading matches the letter it is actually showing. */
+  title?: string;
 };
 
-export function LetterModal({ letter, onClose }: LetterModalProps) {
+export function LetterModal({
+  letter,
+  onClose,
+  title = "Draft request letter",
+}: LetterModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const letterRef = useRef<HTMLDivElement>(null);
   const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -207,7 +215,7 @@ export function LetterModal({ letter, onClose }: LetterModalProps) {
         >
           <div className="no-print">
             <h2 id={headingId} className="text-title font-semibold text-ink">
-              Draft request letter
+              {title}
             </h2>
             <p className="mt-1 text-body-s text-ink-secondary">To: {recipientLabel}</p>
           </div>

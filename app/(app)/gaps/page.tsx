@@ -1,7 +1,9 @@
 import { getActiveCaseId } from "@/components/data/activeCase";
 import { gapViews, getCase } from "@/components/data/dal";
 import { draftRequestLetter, type RequestLetter } from "@/lib/copy/request_letters";
+import { chcDeadlines } from "@/lib/detectors/chc_clock";
 import { GapCard } from "@/components/gaps/GapCard";
+import { ClockCard } from "@/components/gaps/ClockCard";
 import { GhostCard } from "@/components/ui/GhostCard";
 
 export default async function GapsPage() {
@@ -23,6 +25,17 @@ export default async function GapsPage() {
     ]),
   );
 
+  // Same server-side-generation discipline as the gap letters above: the CHC
+  // clock (lib/detectors/chc_clock.ts) is computed here, once, from the live
+  // facts, with an explicit `now` — never inside a client component, which
+  // would either need its own copy of `snapshot.facts` (breaking the "DAL is
+  // server-side only" rule) or would read the wall clock unpredictably on
+  // every render. fixtures/margaret.json carries one `chc.checklist_date`
+  // fact (pinned by lib/detectors/__tests__/chc_clock.test.ts), so one card
+  // renders; zero such facts yields an empty array and no extra markup —
+  // there is deliberately no empty-state card for this section.
+  const deadlines = chcDeadlines(snapshot.facts, new Date());
+
   return (
     <div>
       <h1 className="text-title font-semibold text-ink">Gaps</h1>
@@ -30,6 +43,18 @@ export default async function GapsPage() {
         Statements about what the record shows — and what it doesn&#8217;t. Nothing
         here is advice about what to do next.
       </p>
+
+      {deadlines.length > 0 && (
+        <div className="mt-8 flex flex-col gap-6">
+          {deadlines.map((deadline) => (
+            <ClockCard
+              key={deadline.fact_id}
+              statement={deadline.statement}
+              letter={deadline.chase_letter}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="mt-8 flex flex-col gap-6">
         {gaps.length === 0 ? (
