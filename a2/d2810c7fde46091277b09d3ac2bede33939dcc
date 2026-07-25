@@ -1,0 +1,79 @@
+app/page.tsx
+  s_afabf214a6fe93::t_e6288428c7ad9e 1
+  s_afabf214a6fe93::t_32eeeaaf986cef 34-35
+app/(app)/conflicts/page.tsx
+  s_afabf214a6fe93::t_d68fdeff0bc346 1,6-8
+components/upload/DropZone.tsx
+  s_afabf214a6fe93::t_e20a2ad3f3800f 17,23,27
+  s_afabf214a6fe93::t_b9402cbb5d17b2 91
+components/dashboard/__tests__/case-switcher.test.tsx
+  s_afabf214a6fe93::t_37f885fcecfc92 1-49
+app/(app)/gaps/page.tsx
+  s_afabf214a6fe93::t_2e73cd981d9e3f 1,6-8
+components/dashboard/DashboardView.tsx
+  s_afabf214a6fe93::t_24a616bd39d902 1-74
+app/(app)/layout.tsx
+  s_afabf214a6fe93::t_aa0e7e475d2d84 4-7,11-20,22,27-30,45-49
+app/(app)/dashboard/page.tsx
+  s_afabf214a6fe93::t_27a45d19ace399 1,10-11
+  s_afabf214a6fe93::t_3675ff7f0851ac 2,5-8,12
+fixtures/maya.json
+  s_afabf214a6fe93::t_36acf351d16c0d 1-14,16-25,27-91,93-336
+  s_afabf214a6fe93::t_5ec8b936869b65 15
+  s_afabf214a6fe93::t_866da62589c2a8 92
+  s_afabf214a6fe93::t_6ab1d874c2dbd1 26
+components/data/caseCookie.ts
+  s_afabf214a6fe93::t_4ef4e71321f60a 1-9
+app/(app)/artefacts/page.tsx
+  s_afabf214a6fe93::t_5a0503d8e8ca20 2,8-9,11
+components/voice/voice.ts
+  s_afabf214a6fe93::t_33944d3191ffd6 8-14
+  s_afabf214a6fe93::t_dcb03ce7c37f92 1-7,15-40
+components/data/__tests__/dal.test.ts
+  s_afabf214a6fe93::t_28303186eaa62f 170-224
+lib/__tests__/contract.test.ts
+  s_afabf214a6fe93::t_1269ab446b18c8 16-17,30-44,127-140,142,148-155
+components/dashboard/CaseSwitcher.tsx
+  s_afabf214a6fe93::t_bbd24b6b3c39d7 1-48
+app/(app)/upload/page.tsx
+  s_afabf214a6fe93::t_868db4df203710 7,14-17,20,34
+components/dashboard/__tests__/dashboard.test.tsx
+  s_afabf214a6fe93::t_ed188950ed0c38 134-136,138-143
+  s_afabf214a6fe93::t_90fd2964299594 5-11,15-18,21-24,32,47,49-50,60,66,74,87-88,97-99,101-133,137,144
+  s_afabf214a6fe93::t_82d241a7326381 100
+  s_afabf214a6fe93::t_659cf4a9ff3e68 28-29
+components/voice/VoiceProvider.tsx
+  s_afabf214a6fe93::t_8bd8f4502e8255 1-43
+app/(app)/timeline/page.tsx
+  s_afabf214a6fe93::t_60c4cbf9e6ec4e 8,12-14
+components/data/activeCase.ts
+  s_afabf214a6fe93::t_04a941d5b99da0 1-15,17-22
+  s_afabf214a6fe93::t_91f2042599066a 16
+components/dashboard/SourceList.tsx
+  s_afabf214a6fe93::t_d31872160d4c48 17,23,28,34-36
+app/(app)/artefacts/[key]/page.tsx
+  s_afabf214a6fe93::t_fe665bf3be3756 3,13,20-22,25
+components/data/dal.ts
+  s_afabf214a6fe93::t_cf4f3664f22771 162-163,170-171,174-175
+  s_afabf214a6fe93::t_0ff90e534c3c1e 413-417,422,437,454-455
+  s_afabf214a6fe93::t_6cf6df1ef80d43 198,200,203-207,218,240,242,246-247,260-262,265-266,275
+  s_afabf214a6fe93::t_a6e2b80c9e6a03 9-12,18-28,45,50-54,56-82
+  s_afabf214a6fe93::t_d615f93d2d6328 312-314,316,320
+  s_afabf214a6fe93::t_3f12582b966ed4 356-358,364,368
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "a2d2810c7fde46091277b09d3ac2bede33939dcc",
+  "prompts": {},
+  "sessions": {
+    "s_afabf214a6fe93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c999a24-05c7-418e-a055-0e42e33d7f6d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    }
+  }
+}
