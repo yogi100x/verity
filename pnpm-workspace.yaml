@@ -3,3 +3,5 @@
 allowBuilds:
   esbuild: true
   sharp: true
+minimumReleaseAgeExclude:
+  - '@anthropic-ai/sdk@0.115.0'
