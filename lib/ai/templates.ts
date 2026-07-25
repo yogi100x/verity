@@ -41,10 +41,46 @@ export class BannedArtefactTitleError extends Error {
   }
 }
 
-function assertTitleNotBanned(template: ArtifactTemplate): void {
+/**
+ * Fold away the disguises a banned title actually arrives in. The S7 review
+ * proved the bare word-boundary check was defeated by exactly the likeliest
+ * forms: "Referrals Pack" slipped past `\breferral\b`, as did "Handover
+ * notes", "Hand over note", "Handover-note", "S.B.A.R." and a double-spaced
+ * "Clinical  summary". A mistitled template is far likelier to arrive plural
+ * or re-punctuated than as the exact banned string, so the check normalises
+ * both sides the same way: lowercase, strip periods and hyphens, collapse
+ * whitespace, then drop a trailing s from each word. Deliberately NOT a
+ * general stemmer — just enough to make the ban mean what it says.
+ */
+function foldTitle(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[.\-‐-―]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w !== '')
+    // "summaries" -> "summary"; "referrals" -> "referral". The -ies fold
+    // runs first or "summaries" would only shed its trailing s.
+    .map((w) => (w.length > 3 ? w.replace(/ies$/, 'y').replace(/s$/, '') : w))
+    .join(' ');
+}
+
+export function assertTitleNotBanned(template: Pick<ArtifactTemplate, 'key' | 'title'>): void {
+  const foldedTitle = ` ${foldTitle(template.title)} `;
+  const squashedTitle = foldedTitle.replace(/ /g, '');
   for (const banned of BANNED_ARTEFACT_TITLES) {
-    const pattern = new RegExp(`\\b${banned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-    if (pattern.test(template.title)) {
+    // Two comparisons, because banned titles arrive in two disguises the
+    // folding alone cannot unify:
+    //   - space-delimited containment keeps word-boundary semantics for the
+    //     ordinary case ("Referrals Pack")
+    //   - squashed containment catches word-splitting and per-letter
+    //     punctuation ("Hand over note", "S.B.A.R."), at the cost of a
+    //     theoretical false positive (a title containing "crossbar" squashes
+    //     over "sbar") — the safe direction, since a false positive is a
+    //     LOUD load failure someone fixes, not a silent pass.
+    if (
+      foldedTitle.includes(` ${foldTitle(banned)} `) ||
+      squashedTitle.includes(foldTitle(banned).replace(/ /g, ''))
+    ) {
       throw new BannedArtefactTitleError(template.key, template.title, banned);
     }
   }
