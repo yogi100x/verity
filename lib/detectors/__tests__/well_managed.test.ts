@@ -8,17 +8,12 @@
  * detection logic and the structural guarantee that a flag can only ever
  * carry a `CitationId`, never free citation text.
  *
- * Note on the seeded fixture: `fixtures/margaret.json` (4 sources, frozen —
- * see CLAUDE.md) does not yet contain the care-log source described in
- * `demo/documents/05-care-log.md`. Lane C's territory excludes `fixtures/`,
- * so until the orchestrator seeds that fifth source, the "fires on the seeded
- * care-log entry" test below parses the real fixture with `CaseSnapshot`
- * (proving it still conforms) and then builds an extended in-memory snapshot
- * through `Source.parse` and `CaseSnapshot.parse`. The extension is
- * Zod-validated end to end — there is no `as`, no cast and no hand-built
- * object escaping the contract — and no file under `fixtures/` is mutated or
- * written to. When the fixture is seeded, the derivation below is deleted
- * and the source is read straight from the snapshot; nothing else changes.
+ * The care-log source is SEEDED in `fixtures/margaret.json` (the fifth
+ * source, id 60000000-…-0001) — the orchestrator added it on 25 July 2026,
+ * so the "fires on the seeded care-log entry" test reads it straight from
+ * the parsed snapshot. A cross-check asserts the fixture's transcript is
+ * byte-identical to the flattening of `demo/documents/05-care-log.md`, so
+ * the fixture, the demo document and these tests cannot drift apart.
  *
  * `CARE_LOG_TRANSCRIPT` is derived AT TEST TIME from the actual text of
  * `demo/documents/05-care-log.md` (the indented log block, line wraps
@@ -72,27 +67,18 @@ function syntheticSource(id: string, title: string, transcript: string): Source 
 }
 
 describe('detectWellManagedNeeds', () => {
-  it('fires on the seeded care-log entry (extends the real fixture in memory)', () => {
+  it('fires on the seeded care-log entry in fixtures/margaret.json', () => {
     const snap = CaseSnapshot.parse(fixture);
 
-    const careLogSource = Source.parse({
-      id: '60000000-0000-4000-8000-000000000001',
-      person_id: snap.person.id,
-      kind: 'text',
-      title: 'Care log extract',
-      storage_path: 'demo/documents/05-care-log.md',
-      transcript: CARE_LOG_TRANSCRIPT,
-      transcript_confidence: 0.9,
-      author_member_id: null,
-      created_at: '2026-07-11T09:00:00Z',
-    });
+    const careLogSource = snap.sources.find((s) => s.title === 'Care log extract');
+    expect(careLogSource, 'fixture should contain the seeded care-log source').toBeDefined();
+    if (careLogSource === undefined) return;
 
-    const augmented = CaseSnapshot.parse({
-      ...snap,
-      sources: [...snap.sources, careLogSource],
-    });
+    // The fixture and the demo document must never drift apart: the seeded
+    // transcript is exactly the flattening of demo/documents/05-care-log.md.
+    expect(careLogSource.transcript).toBe(CARE_LOG_TRANSCRIPT);
 
-    const flags = detectWellManagedNeeds(augmented.sources);
+    const flags = detectWellManagedNeeds(snap.sources);
     const careLogFlags = flags.filter((f) => f.source_id === careLogSource.id);
 
     expect(careLogFlags.length).toBeGreaterThan(0);
