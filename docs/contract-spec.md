@@ -566,6 +566,16 @@ Lane D seeds `artifact_templates` from this file. Nobody hand-writes template SQ
 
 ---
 
+## 3c. Storage — canonical facts
+
+**The Supabase storage bucket is named `documents`.** Private, never public. Decreed 25 Jul after Lane A had to guess (it guessed right); one-line to change if Supabase provisioning ever demands otherwise, but every reference should use this name.
+
+Signed URLs: 60-second TTL, minted server-side only, in `app/api/sources/[id]/open`. That route is the **one sanctioned use of the service-role key in a request path** — storage URL minting only, never a database read — and the deviation is recorded here deliberately.
+
+Mode parity is a hard requirement of that route: `fixtures`/`replay` serve the matching `demo/` asset with the same `#page=` fragment and must be behaviourally identical to `live`.
+
+---
+
 ## 4. Changing the contract after freeze
 
 It will need to change. Handle it deliberately:
