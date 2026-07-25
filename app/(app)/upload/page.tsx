@@ -1,4 +1,5 @@
 import { getActiveCaseId } from "@/components/data/activeCase";
+import { getLivePersonId } from "@/components/data/livePerson";
 import { getCase } from "@/components/data/dal";
 import { UploadView } from "@/components/upload/UploadView";
 import { resolveMode } from "@/lib/modes";
@@ -31,8 +32,14 @@ export default async function UploadPage({
   const modeParam = typeof params.mode === "string" ? params.mode : undefined;
   const mode = resolveMode({ searchParam: modeParam });
 
+  // A record this browser created through /welcome wins over the seeded
+  // fixture person: uploading to the fixture id from a live record would
+  // write documents into an account this visitor does not own, and the
+  // route's care-access check would (correctly) 403 them. Absent cookie =>
+  // the seeded case, exactly as before /welcome existed.
+  const livePersonId = await getLivePersonId();
   const caseId = await getActiveCaseId();
   const { person } = getCase(caseId);
 
-  return <UploadView personId={person.id} mode={mode} />;
+  return <UploadView personId={livePersonId ?? person.id} mode={mode} />;
 }

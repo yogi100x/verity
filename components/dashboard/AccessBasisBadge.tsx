@@ -7,7 +7,10 @@
 
 import type { AccessBasis } from "@/lib/contracts";
 
-const ACCESS_BASIS_LABELS: Record<AccessBasis, string> = {
+/** Exported so the onboarding form (components/onboarding/WelcomeForm.tsx)
+ *  labels its four options with the words already on screen elsewhere,
+ *  rather than a second set that could drift from this badge's. */
+export const ACCESS_BASIS_LABELS: Record<AccessBasis, string> = {
   self: "Acting for yourself",
   person_consent: "Access given by consent",
   lpa_health_welfare: "Lasting Power of Attorney — health & welfare",
