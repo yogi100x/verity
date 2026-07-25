@@ -24,11 +24,25 @@ const response: ModelResponse = {
   id: 'msg_recorder_test',
   type: 'message',
   role: 'assistant',
+  container: null,
+  stop_details: null,
   model: 'claude-test-model',
-  content: [{ type: 'text', text: 'Furosemide 40mg, stopped on discharge.' }],
+  content: [
+    { type: 'text', text: 'Furosemide 40mg, stopped on discharge.', citations: null },
+  ],
   stop_reason: 'end_turn',
   stop_sequence: null,
-  usage: { input_tokens: 42, output_tokens: 12 },
+  usage: {
+    cache_creation: null,
+    cache_creation_input_tokens: null,
+    cache_read_input_tokens: null,
+    inference_geo: null,
+    input_tokens: 42,
+    output_tokens: 12,
+    output_tokens_details: null,
+    server_tool_use: null,
+    service_tier: null,
+  },
 };
 
 describe('createFsFixtureStore (recorder)', () => {
@@ -94,7 +108,9 @@ describe('createFsFixtureStore (recorder)', () => {
     const hash = requestHash(request);
     const variants: ModelResponse[] = Array.from({ length: 8 }, (_unused, index) => ({
       ...response,
-      content: [{ type: 'text', text: `variant ${index} ${'padding '.repeat(500)}` }],
+      content: [
+        { type: 'text', text: `variant ${index} ${'padding '.repeat(500)}`, citations: null },
+      ],
     }));
 
     await Promise.all(variants.map((variant) => store.write(hash, variant)));

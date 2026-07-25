@@ -18,6 +18,19 @@ import type {
   ModelTransport,
 } from '../types';
 
+/** SDK 0.115 Usage/TextBlock require the full field set; nullables null. */
+const stubUsage = (input_tokens: number, output_tokens: number) => ({
+  cache_creation: null,
+  cache_creation_input_tokens: null,
+  cache_read_input_tokens: null,
+  inference_geo: null,
+  input_tokens,
+  output_tokens,
+  output_tokens_details: null,
+  server_tool_use: null,
+  service_tier: null,
+});
+
 const request: ModelRequest = {
   model: 'claude-test-model',
   max_tokens: 128,
@@ -28,22 +41,30 @@ const fixtureResponse: ModelResponse = {
   id: 'msg_fixture',
   type: 'message',
   role: 'assistant',
+  container: null,
+  stop_details: null,
   model: 'claude-test-model',
-  content: [{ type: 'text', text: 'Furosemide 40mg was stopped prior to discharge.' }],
+  content: [
+    { type: 'text', text: 'Furosemide 40mg was stopped prior to discharge.', citations: null },
+  ],
   stop_reason: 'end_turn',
   stop_sequence: null,
-  usage: { input_tokens: 20, output_tokens: 10 },
+  usage: stubUsage(20, 10),
 };
 
 const liveResponse: ModelResponse = {
   id: 'msg_live',
   type: 'message',
   role: 'assistant',
+  container: null,
+  stop_details: null,
   model: 'claude-test-model',
-  content: [{ type: 'text', text: 'Live: furosemide was stopped due to renal function.' }],
+  content: [
+    { type: 'text', text: 'Live: furosemide was stopped due to renal function.', citations: null },
+  ],
   stop_reason: 'end_turn',
   stop_sequence: null,
-  usage: { input_tokens: 22, output_tokens: 14 },
+  usage: stubUsage(22, 14),
 };
 
 /** Fails the test if the transport is ever invoked — used to prove
