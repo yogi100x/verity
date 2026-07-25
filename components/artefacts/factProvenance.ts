@@ -11,23 +11,37 @@
  * `resolveFactProvenance` export, this file becomes a thin re-export.
  */
 
-import { timelineEvents, type EventProvenance } from "@/components/data/dal";
+import { ALL_CASE_IDS, timelineEvents, type EventProvenance } from "@/components/data/dal";
 import type { Fact } from "@/lib/contracts";
 
+/**
+ * Fact ids are unique across every seeded case, so provenance is resolved by
+ * searching all case registries rather than assuming the default case. The
+ * original single-case cache silently pinned this map to Margaret, which
+ * crashed every artefact screen the moment the S1 account switcher put Maya's
+ * facts in front of it — the fail-loud guard below did its job; the map was
+ * the bug.
+ */
 let cache: Map<string, EventProvenance> | null = null;
 
 function provenanceByFactId(): Map<string, EventProvenance> {
   if (cache === null) {
-    cache = new Map(timelineEvents().map((event) => [event.fact.id, event.provenance]));
+    cache = new Map(
+      ALL_CASE_IDS.flatMap((caseId) =>
+        timelineEvents(caseId).map(
+          (event) => [event.fact.id, event.provenance] as const,
+        ),
+      ),
+    );
   }
   return cache;
 }
 
 /**
- * Resolves a fact cited by an artefact assertion to its provenance shape.
- * Fails loud if the fact isn't resolvable (e.g. status 'unknown', which the
- * timeline excludes) — a sourceless fact must never reach the UI
- * (docs/design.md §10).
+ * Resolves a fact cited by an artefact assertion to its provenance shape,
+ * whichever seeded case it belongs to. Fails loud if the fact isn't
+ * resolvable (e.g. status 'unknown', which the timeline excludes) — a
+ * sourceless fact must never reach the UI (docs/design.md §10).
  */
 export function resolveFactProvenance(fact: Fact): EventProvenance {
   const provenance = provenanceByFactId().get(fact.id);

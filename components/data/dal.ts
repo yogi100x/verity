@@ -75,6 +75,13 @@ const CASE_REGISTRY: Record<CaseId, CaseIndex> = {
   maya: buildIndex(mayaFixture),
 };
 
+/** Every registered case id, for callers that must search across cases
+ *  (e.g. resolving an artefact-cited fact to its provenance regardless of
+ *  which account is active). Keep in lockstep with CASE_REGISTRY — the
+ *  `satisfies` keeps members valid, and CASE_REGISTRY's Record<CaseId, ...>
+ *  type forces a registry entry for any new CaseId union member. */
+export const ALL_CASE_IDS = ['margaret', 'maya'] as const satisfies readonly CaseId[];
+
 function indexFor(caseId: CaseId = DEFAULT_CASE_ID): CaseIndex {
   return CASE_REGISTRY[caseId];
 }
