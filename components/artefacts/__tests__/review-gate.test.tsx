@@ -11,6 +11,8 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReviewGate } from "../ReviewGate";
 
+const TEST_PERSON_ID = "11111111-1111-4111-8111-111111111111";
+
 function Harness() {
   const [reviewed, setReviewed] = useState(false);
   const [reviewerName, setReviewerName] = useState("");
@@ -20,6 +22,7 @@ function Harness() {
       onReviewedChange={setReviewed}
       reviewerName={reviewerName}
       onReviewerNameChange={setReviewerName}
+      personId={TEST_PERSON_ID}
     />
   );
 }
