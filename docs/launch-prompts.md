@@ -112,6 +112,8 @@ With three machines you run this yourself. Paste into a fourth Claude Code sessi
 > Then: the three modes (`live`, `fixtures`, `replay`) rendering through one identical code path, the fixtures recorder keyed by request hash, `/demo/reset`, and the service worker with network-first for HTML and API routes.
 >
 > If replay mode ever looks different from live, the fallback is a lie and a judge will spot it. That property matters more than anything else you build.
+>
+> Two Lane C facts you inherit — handle them on your side, never ask Lane C to relax a rule. First: the Sat 11/07 "near-miss" in `demo/documents/05-care-log.md` contradicts its own text — the line carries `Assisted wash/dress. Prompted meds.` twelve characters from `no concerns`, so the well-managed detector correctly fires there. Amend the Saturday entry to be genuinely intervention-free before scoring the §7 blind test, and re-run `pnpm test` afterwards — Lane C's tests read that document at test time. Second: "difficulty swallowing" is a deterministic red-flag trigger and halts the pipeline when it appears in concern text. Never put it in a typed concern in the demo script; documents are never scanned, so dysphagia language in documents is fine.
 
 ---
 
