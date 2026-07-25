@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { Source } from "@/lib/contracts";
+import type { Mode } from "@/lib/modes";
 
 export type DictationErrorKind = "unsupported" | "denied" | "failed";
 
@@ -34,6 +35,14 @@ export type DictationState =
 export type UseDictationOptions = {
   personId: string;
   title?: string;
+  /**
+   * When provided, threaded onto the upload URL as `?mode=<mode>` so the
+   * voice route resolves the same mode as the screen it was recorded from
+   * (see app/api/voice/upload/route.ts). Omitted call sites (e.g. ReviewGate)
+   * keep today's behaviour unchanged: a bare URL, mode resolved server-side
+   * from NEXT_PUBLIC_DEFAULT_MODE.
+   */
+  mode?: Mode;
   onSaved?: (source: Source) => void;
 };
 
@@ -71,7 +80,7 @@ function isNotAllowedError(error: unknown): boolean {
   );
 }
 
-export function useDictation({ personId, title, onSaved }: UseDictationOptions) {
+export function useDictation({ personId, title, mode, onSaved }: UseDictationOptions) {
   // Always start `idle` — a deterministic value that renders identically on
   // the server (no window) and on the client, so hydration never mismatches.
   // `isDictationSupported()` reads `window`/`navigator`, which are absent
@@ -87,9 +96,11 @@ export function useDictation({ personId, title, onSaved }: UseDictationOptions) 
   const mountedRef = useRef(true);
   const personIdRef = useRef(personId);
   const titleRef = useRef(title);
+  const modeRef = useRef(mode);
   const onSavedRef = useRef(onSaved);
   personIdRef.current = personId;
   titleRef.current = title;
+  modeRef.current = mode;
   onSavedRef.current = onSaved;
 
   useEffect(() => {
@@ -155,8 +166,12 @@ export function useDictation({ personId, title, onSaved }: UseDictationOptions) 
     formData.append("person_id", personIdRef.current);
     if (titleRef.current) formData.append("title", titleRef.current);
 
+    const url = modeRef.current
+      ? `/api/voice/upload?mode=${encodeURIComponent(modeRef.current)}`
+      : "/api/voice/upload";
+
     try {
-      const response = await fetch("/api/voice/upload", { method: "POST", body: formData });
+      const response = await fetch(url, { method: "POST", body: formData });
       if (!response.ok) {
         if (mountedRef.current) setState({ status: "error", kind: "failed" });
         return;

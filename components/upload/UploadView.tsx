@@ -3,16 +3,26 @@
 import { MicButton } from "@/components/dictation/MicButton";
 import { DropZone } from "@/components/upload/DropZone";
 import { FileProgressList } from "@/components/upload/FileProgressList";
+import { createLiveDriver } from "@/components/upload/liveDriver";
 import { UploadSummary } from "@/components/upload/UploadSummary";
-import { useUploadSimulation } from "@/components/upload/useUploadSimulation";
+import { simulatedUploadDriver, useUploadSimulation } from "@/components/upload/useUploadSimulation";
 import { useVoice } from "@/components/voice/VoiceProvider";
 import { DICTATION_PROMPT } from "@/lib/copy/dictation";
+import type { Mode } from "@/lib/modes";
 
 /**
- * Add a document. Lane A hasn't wired real extraction yet, so processing is
- * simulated (mode: fixtures) behind `useUploadSimulation` — the one place a
- * real driver swaps in later. Nothing else on this screen changes when it
- * does.
+ * Add a document. `mode` is resolved server-side in `app/(app)/upload/page.tsx`
+ * (`?mode=` > `NEXT_PUBLIC_DEFAULT_MODE` > 'fixtures') and handed down here as
+ * a plain prop, same reason `personId` is: a client component must not read
+ * env/searchParams itself and re-derive a value its server parent already
+ * settled.
+ *
+ * `mode === 'live'` is the only branch: it swaps in `createLiveDriver`, which
+ * POSTs the real file to `/api/extract?mode=live` and renders the real report
+ * through this same screen. Every other value (`'fixtures'`, `'replay'`,
+ * `undefined`) keeps the untouched `simulatedUploadDriver` — the one place a
+ * real driver swaps in, per `useUploadSimulation`'s doc comment. Nothing else
+ * on this screen changes either way.
  *
  * A client component, so it cannot read the case cookie or call the DAL
  * itself (that would pull every fixture into the browser bundle). It takes
@@ -21,9 +31,10 @@ import { DICTATION_PROMPT } from "@/lib/copy/dictation";
  * `VoiceProvider` doesn't carry — as a prop from its server parent,
  * `app/(app)/upload/page.tsx`.
  */
-export function UploadView({ personId }: { personId: string }) {
+export function UploadView({ personId, mode }: { personId: string; mode?: Mode }) {
   const { voice, displayName } = useVoice();
-  const { items, addFiles, allDone, totalClaims } = useUploadSimulation();
+  const driver = mode === "live" ? createLiveDriver(personId) : simulatedUploadDriver;
+  const { items, addFiles, allDone, totalClaims } = useUploadSimulation(driver);
 
   return (
     <div className="flex flex-col gap-10 md:gap-12">
@@ -40,7 +51,7 @@ export function UploadView({ personId }: { personId: string }) {
 
       <div className="flex flex-col gap-3 rounded-card border border-hairline bg-surface p-6 md:flex-row md:items-center md:justify-between">
         <p className="max-w-[32rem] text-body-s text-ink-secondary">{DICTATION_PROMPT}</p>
-        <MicButton personId={personId} variant="primary" />
+        <MicButton personId={personId} variant="primary" mode={mode} />
       </div>
 
       {items.length > 0 && <FileProgressList items={items} />}
