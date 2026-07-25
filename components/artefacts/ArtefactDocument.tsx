@@ -1,0 +1,63 @@
+"use client";
+
+/**
+ * The artefact document itself: masthead, review gate, template-driven
+ * sections, footer disclaimer. This is the ONE component both phase-1
+ * templates render through — never a per-template component.
+ *
+ * `print-columns` / `print-avoid-break` hook the print stylesheet already
+ * defined in app/globals.css (not edited here). The sections wrapper stays
+ * a plain block element (no flex) because CSS multi-column layout only
+ * applies to block-level containers.
+ */
+
+import { useState } from "react";
+import type { ArtifactView } from "@/components/data/dal";
+import { ArtefactSection } from "./ArtefactSection";
+import { ReviewGate } from "./ReviewGate";
+
+type ArtefactDocumentProps = {
+  view: ArtifactView;
+  /** Pre-formatted en-GB date string, computed by the server page so the
+   *  client component never depends on the reader's clock or locale. */
+  todayLabel: string;
+};
+
+export function ArtefactDocument({ view, todayLabel }: ArtefactDocumentProps) {
+  const [reviewed, setReviewed] = useState(false);
+  const [reviewerName, setReviewerName] = useState("");
+  const displayName = reviewerName.trim();
+
+  return (
+    <article>
+      <header className="mb-10 print-avoid-break">
+        <h1 className="print-masthead font-display text-display-l font-[560] text-ink">
+          {view.title}
+        </h1>
+        <p className="mt-2 text-body-s text-ink-secondary">{view.audience}</p>
+      </header>
+
+      <ReviewGate
+        reviewed={reviewed}
+        onReviewedChange={setReviewed}
+        reviewerName={reviewerName}
+        onReviewerNameChange={setReviewerName}
+      />
+
+      <div className="print-columns space-y-12">
+        {view.sections.map((section) => (
+          <ArtefactSection key={section.key} section={section} />
+        ))}
+      </div>
+
+      <footer className="print-footer print-avoid-break mt-12 border-t border-hairline pt-6 text-body-s text-ink-secondary">
+        <p>
+          Assembled by {displayName.length > 0 ? displayName : "—"} using Verity on{" "}
+          {todayLabel} from documents they supplied and reviewed. This is not a clinical
+          record, not a clinical summary, and has not been reviewed by a clinician. Every
+          dated item links to the page it came from.
+        </p>
+      </footer>
+    </article>
+  );
+}
