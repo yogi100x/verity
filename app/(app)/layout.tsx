@@ -43,7 +43,13 @@ export default async function AppLayout({
       </header>
 
       <VoiceProvider value={{ voice, caseId, displayName: person.display_name }}>
-        <main className="mx-auto w-full max-w-[70rem] flex-1 px-6 pb-24 pt-8 md:pb-12">
+        {/* tabIndex={-1} lets the skip link in the root layout move focus
+            here programmatically without adding main to the tab order. */}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-[70rem] flex-1 px-6 pb-24 pt-8 outline-none md:pb-12"
+        >
           {children}
         </main>
       </VoiceProvider>
