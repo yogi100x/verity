@@ -15,6 +15,7 @@ import { useState } from "react";
 import { footer } from "@/lib/copy/safety";
 import type { ArtifactView } from "@/components/data/dal";
 import { ArtefactSection } from "./ArtefactSection";
+import { AttendanceAllowanceLine } from "./AttendanceAllowanceLine";
 import { ReviewGate } from "./ReviewGate";
 
 type ArtefactDocumentProps = {
@@ -22,9 +23,24 @@ type ArtefactDocumentProps = {
   /** Pre-formatted en-GB date string, computed by the server page so the
    *  client component never depends on the reader's clock or locale. */
   todayLabel: string;
+  /**
+   * S4 — whether to render the Attendance Allowance line after the last
+   * section. This component never branches on a template key itself (the
+   * structural rule in docs/design.md — components/artefacts must not know
+   * template keys); the caller decides. lib/copy/attendance_allowance.ts
+   * exports no template key or applicability helper to key off, so the
+   * least-bad seam is the page: app/(app)/artefacts/[key]/page.tsx already
+   * holds the validated `templateKey` param and passes this boolean down.
+   * Page-level composition, not renderer branching.
+   */
+  showAttendanceAllowance?: boolean;
 };
 
-export function ArtefactDocument({ view, todayLabel }: ArtefactDocumentProps) {
+export function ArtefactDocument({
+  view,
+  todayLabel,
+  showAttendanceAllowance = false,
+}: ArtefactDocumentProps) {
   const [reviewed, setReviewed] = useState(false);
   const [reviewerName, setReviewerName] = useState("");
   const displayName = reviewerName.trim();
@@ -50,6 +66,10 @@ export function ArtefactDocument({ view, todayLabel }: ArtefactDocumentProps) {
           <ArtefactSection key={section.key} section={section} />
         ))}
       </div>
+
+      {showAttendanceAllowance && (
+        <AttendanceAllowanceLine personName={view.person.display_name} />
+      )}
 
       <footer className="print-footer print-avoid-break mt-12 border-t border-hairline pt-6 text-body-s text-ink-secondary">
         {/* Slot-filled from lib/copy/safety.ts — Lane C pins this template

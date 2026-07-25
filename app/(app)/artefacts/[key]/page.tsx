@@ -29,5 +29,20 @@ export default async function ArtefactPage({
     year: "numeric",
   }).format(new Date());
 
-  return <ArtefactDocument view={view} todayLabel={todayLabel} />;
+  // S4 — the Attendance Allowance line belongs on the CHC pack only
+  // (docs/user-journey.md 9.8). This is the one place that compares against
+  // a template key literal: components/artefacts must never branch on one
+  // (docs/design.md structural rule), and lib/copy/attendance_allowance.ts
+  // exports no template key or applicability helper to key off instead. The
+  // route already validated `templateKey` above, so deciding here is
+  // page-level composition, not renderer branching.
+  const showAttendanceAllowance = templateKey === "chc_dst_pack_v1";
+
+  return (
+    <ArtefactDocument
+      view={view}
+      todayLabel={todayLabel}
+      showAttendanceAllowance={showAttendanceAllowance}
+    />
+  );
 }
