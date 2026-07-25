@@ -17,7 +17,20 @@
 import "@testing-library/jest-dom/vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import UploadPage from "@/app/(app)/upload/page";
+import { UploadView } from "@/components/upload/UploadView";
+import { DICTATION_PROMPT, MIC_START_LABEL } from "@/lib/copy/dictation";
+
+// The former default export of app/(app)/upload/page.tsx was a client
+// component and could be rendered directly. It is now an async Server
+// Component (it reads the active case to hand UploadView its personId
+// prop) and RTL cannot render an async component. Exercising the client
+// view directly with a stand-in id is the same seam review-gate.test.tsx
+// uses for ReviewGate's personId prop.
+const TEST_PERSON_ID = "11111111-1111-4111-8111-111111111111";
+
+function UploadPage() {
+  return <UploadView personId={TEST_PERSON_ID} />;
+}
 
 const STAGE_DELAY_MS = 650;
 
@@ -42,6 +55,14 @@ afterEach(() => {
 });
 
 describe("UploadPage", () => {
+  it("offers dictation on the upload screen: the prompt and a mic button are present", () => {
+    render(<UploadPage />);
+    // The fixed dictation invitation and the mic entry point both render,
+    // so voice is a first-class way to add a source, not a hidden feature.
+    expect(screen.getByText(DICTATION_PROMPT)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: MIC_START_LABEL })).toBeInTheDocument();
+  });
+
   it("advances through named states, never a bare spinner", async () => {
     render(<UploadPage />);
     drop(new File(["x"], "discharge.pdf", { type: "application/pdf" }));

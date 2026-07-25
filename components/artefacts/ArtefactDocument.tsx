@@ -59,6 +59,7 @@ export function ArtefactDocument({
         onReviewedChange={setReviewed}
         reviewerName={reviewerName}
         onReviewerNameChange={setReviewerName}
+        personId={view.person.id}
       />
 
       <div className="print-columns space-y-12">

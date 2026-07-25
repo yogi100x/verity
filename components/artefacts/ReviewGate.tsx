@@ -12,6 +12,7 @@
 
 import { useId } from "react";
 import { Button } from "@/components/ui/Button";
+import { MicButton } from "@/components/dictation/MicButton";
 
 const DISABLED_REASON = "Review to unlock printing";
 
@@ -20,6 +21,10 @@ type ReviewGateProps = {
   onReviewedChange: (reviewed: boolean) => void;
   reviewerName: string;
   onReviewerNameChange: (name: string) => void;
+  /** The active person's uuid, for the dictation mic beside the free-text
+   *  field below — threaded from the server page via ArtefactDocument's
+   *  `view.person.id` (already resolved there; no new server fetch). */
+  personId: string;
 };
 
 export function ReviewGate({
@@ -27,6 +32,7 @@ export function ReviewGate({
   onReviewedChange,
   reviewerName,
   onReviewerNameChange,
+  personId,
 }: ReviewGateProps) {
   const nameId = useId();
   const checkboxId = useId();
@@ -40,14 +46,27 @@ export function ReviewGate({
             <label htmlFor={nameId} className="text-label font-semibold text-ink">
               Your name
             </label>
-            <input
-              id={nameId}
-              type="text"
-              value={reviewerName}
-              onChange={(event) => onReviewerNameChange(event.target.value)}
-              placeholder="Type your name"
-              className="h-12 w-64 max-w-full rounded-card border border-hairline bg-paper px-3 text-body text-ink"
-            />
+            <div className="flex flex-wrap items-center gap-2.5">
+              <input
+                id={nameId}
+                type="text"
+                value={reviewerName}
+                onChange={(event) => onReviewerNameChange(event.target.value)}
+                placeholder="Type your name"
+                className="h-12 w-64 max-w-full rounded-card border border-hairline bg-paper px-3 text-body text-ink"
+              />
+              {/*
+                Dictation here saves a new audio Source, it does not fill
+                the name field: nothing has transcribed the recording yet
+                (see DICTATION_STATES.saved), so writing its title into
+                `reviewerName` would put non-name text where a typed name
+                belongs. MicButton's own "saved" line is the confirmation.
+                No `title` prop: the recording is not a reviewer name, so
+                the honest default ("Voice note — <date>", from
+                lib/voice/audio.ts) titles the Source instead.
+              */}
+              <MicButton personId={personId} variant="compact" />
+            </div>
           </div>
 
           <div className="flex items-center gap-2.5">
