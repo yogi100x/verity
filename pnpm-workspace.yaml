@@ -1,0 +1,5 @@
+# Build-script approvals (pnpm 11 supply-chain control).
+# esbuild powers vitest; sharp powers next/image. Both need postinstall builds.
+allowBuilds:
+  esbuild: true
+  sharp: true

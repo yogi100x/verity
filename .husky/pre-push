@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+#
+# The full gate. Typecheck plus the whole test suite, including the keystone
+# contract test and the template cross-check.
+#
+# This exists because the orchestrator reviews visually and cannot read a diff.
+# A red check means the PR is not reviewed at all, so catching it here saves a
+# round trip through CI and a wasted review slot.
+
+./scripts/verify.sh

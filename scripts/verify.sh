@@ -7,10 +7,16 @@
 #
 # Usage:  ./scripts/verify.sh
 
+#   ./scripts/verify.sh          full: structural checks + typecheck + tests
+#   ./scripts/verify.sh --fast   structural checks only (used by the pre-commit hook)
+
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+
+FAST=0
+[ "${1:-}" = "--fast" ] && FAST=1
 
 FAIL=0
 bold() { printf '\n\033[1m%s\033[0m\n' "$1"; }
@@ -58,13 +64,17 @@ else
   echo "$UI" | sed 's|^|      |'
 fi
 
-bold "Types and tests"
-
-if [ ! -f package.json ]; then
-  bad "package.json missing — run ./scripts/bootstrap.sh first"
+if [ "$FAST" -eq 1 ]; then
+  bold "Types and tests"
+  printf '  \033[33m\xe2\x80\x93\033[0m skipped (--fast). The pre-push hook runs them.\n'
 else
-  if pnpm typecheck >/dev/null 2>&1; then ok "typecheck"; else bad "typecheck failed — run: pnpm typecheck"; fi
-  if pnpm test     >/dev/null 2>&1; then ok "tests";     else bad "tests failed — run: pnpm test"; fi
+  bold "Types and tests"
+  if [ ! -f package.json ]; then
+    bad "package.json missing — run ./scripts/bootstrap.sh first"
+  else
+    if pnpm typecheck >/dev/null 2>&1; then ok "typecheck"; else bad "typecheck failed — run: pnpm typecheck"; fi
+    if pnpm test     >/dev/null 2>&1; then ok "tests";     else bad "tests failed — run: pnpm test"; fi
+  fi
 fi
 
 bold "Territory"

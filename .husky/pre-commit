@@ -1,1 +1,14 @@
-npm test
+#!/usr/bin/env sh
+#
+# Fast structural guards. Runs on every commit, so it must stay quick —
+# no typecheck, no tests. The pre-push hook handles those.
+#
+# What this catches, in order of how much pain it saves:
+#   1. An agent editing the frozen contract or the fixtures
+#   2. A judgement field (severity / urgency / risk / score) reaching a schema
+#   3. A commit spanning two lanes' territories
+#
+# Bypass in a genuine emergency with:  git commit --no-verify
+# If you find yourself doing that twice, the hook is wrong — say so.
+
+./scripts/verify.sh --fast
