@@ -23,10 +23,17 @@ import {
 import { reconcile } from '@/lib/ai/reconcile';
 import { periodDecisionFor } from '@/lib/ai/facts';
 import { buildArtifact } from '@/lib/ai/artifacts';
+import { projectAll } from '@/lib/ai/projections';
+import { detectGaps } from '@/lib/detectors/gaps';
 import { loadTemplates, slotsOf, levelsNotAvailableInDomain } from '@/lib/ai/templates';
-import type { Artifact, ArtifactTemplate, Claim, Fact, Source } from '@/lib/contracts';
+import type { Artifact, ArtifactTemplate, Claim, Conflict, Fact, Source } from '@/lib/contracts';
 import { CaseSnapshot } from '@/lib/contracts';
-import type { SlotOmission } from '@/lib/ai/artifacts';
+import type {
+  BackingClaim,
+  SlotOmission,
+  SlotSuppression,
+  StructuralAssertion,
+} from '@/lib/ai/artifacts';
 import fixtureRaw from '@/fixtures/margaret.json';
 
 export const dynamic = 'force-dynamic';
@@ -97,6 +104,10 @@ const fixture = CaseSnapshot.parse(fixtureRaw);
  */
 interface ReconcileViews {
   readonly conflicts: InspectConflictView[];
+  /** The real `Conflict[]` `reconcile()` produced — what `projectAll` needs
+   *  to build `conflict.*` facts. `InspectConflictView` above is a rendering
+   *  projection of the same data and cannot round-trip back into a `Conflict`. */
+  readonly rawConflicts: readonly Conflict[];
   readonly facts: InspectFactView[];
   /** The raw derived facts (superseded ones included) — what `buildArtifact`
    *  needs, since it filters to live facts internally. */
@@ -175,7 +186,7 @@ function reconcileViewsFor(reports: readonly ExtractionReport[]): ReconcileViews
       }),
   }));
 
-  return { conflicts: conflictViews, facts: factViews, rawFacts: facts, claimById, sourcesById };
+  return { conflicts: conflictViews, rawConflicts: conflicts, facts: factViews, rawFacts: facts, claimById, sourcesById };
 }
 
 /**
@@ -246,12 +257,19 @@ function artifactViewFor(
   template: ArtifactTemplate,
   artifact: Artifact,
   omissions: readonly SlotOmission[],
+  structuralAssertions: readonly StructuralAssertion[],
+  suppressions: readonly SlotSuppression[],
   factsById: ReadonlyMap<string, Fact>,
   claimById: ReadonlyMap<string, Claim>,
   sourcesById: ReadonlyMap<string, Pick<Source, 'kind' | 'title'>>,
   questionByConflictId: ReadonlyMap<string, string>,
 ): InspectArtifactView {
   const assertionBySlotKey = new Map(artifact.assertions.map((a) => [a.slot_key, a] as const));
+  const structuralBySlotKey = new Map(structuralAssertions.map((s) => [s.slot_key, s] as const));
+  // A slot that matched real, verified evidence and had it withheld renders
+  // the same "what to ask for" prompt as a slot with nothing behind it. This
+  // map is what lets the page tell the two apart — see `SlotSuppression`.
+  const suppressionBySlotKey = new Map(suppressions.map((s) => [s.slot_key, s] as const));
   const slotsTotal = slotsOf(template).length;
 
   interface SectionBucket {
@@ -287,6 +305,15 @@ function artifactViewFor(
       status: fact.status,
     }));
 
+    // A slot named in `structuralAssertions` is verbatim copy — Lane C's
+    // fixed wording, or a verbatim framework citation — never evidence and
+    // never a plain gap. It must never be confused with either: it carries
+    // no `fact_ids` (so `citation_verified` is false, same as a gap-prompt
+    // assertion), but its text is real, non-empty, shipped-verbatim copy.
+    const structural = structuralBySlotKey.get(slot.key);
+    const state: 'filled' | 'verbatim_copy' | 'gap_prompt' =
+      structural !== undefined ? 'verbatim_copy' : assertion.citation_verified ? 'filled' : 'gap_prompt';
+
     bucket.slots.push({
       slot_key: slot.key,
       label: slot.label,
@@ -304,14 +331,17 @@ function artifactViewFor(
       ),
       citation_verified: assertion.citation_verified,
       citations: citationsForFactIds(assertion.fact_ids, factsById, claimById, sourcesById),
-      // citation_verified is exactly "fact_ids non-empty" (lib/ai/artifacts.ts),
-      // so this is equivalent to `assertion.fact_ids.length > 0`.
-      state: assertion.citation_verified ? 'filled' : 'gap_prompt',
+      state,
+      verbatim_attribution: structural?.attribution ?? null,
+      verbatim_source: structural?.source ?? null,
+      suppression: suppressionBySlotKey.get(slot.key) ?? null,
     });
   }
 
+  const structuralKeys = new Set(structuralAssertions.map((s) => s.slot_key));
+  const verbatimCopy = artifact.assertions.filter((a) => structuralKeys.has(a.slot_key)).length;
   const filled = artifact.assertions.filter((a) => a.citation_verified).length;
-  const gapPrompted = artifact.assertions.length - filled;
+  const gapPrompted = artifact.assertions.length - filled - verbatimCopy;
   const omitted = slotsTotal - artifact.assertions.length;
 
   const sections = sectionOrder.map((key) => {
@@ -331,7 +361,19 @@ function artifactViewFor(
     title: template.title,
     audience: template.audience,
     sections,
-    counts: { slots_total: slotsTotal, filled, gap_prompted: gapPrompted, omitted },
+    counts: {
+      slots_total: slotsTotal,
+      filled,
+      verbatim_copy: verbatimCopy,
+      gap_prompted: gapPrompted,
+      omitted,
+      // Counted from the assertions actually rendered, not from
+      // `suppressions.length`: a suppression on a slot with no gap_prompt ends
+      // up omitted, and would otherwise be double-counted here.
+      suppressed: artifact.assertions.filter(
+        (a) => !a.citation_verified && !structuralKeys.has(a.slot_key) && suppressionBySlotKey.has(a.slot_key),
+      ).length,
+    },
     omissions: omissions.map((o) => ({
       slot_key: o.slot_key,
       label: o.label,
@@ -356,19 +398,42 @@ function artifactsFor(
   sourcesById: ReadonlyMap<string, Pick<Source, 'kind' | 'title'>>,
   personId: string,
   conflicts: readonly InspectConflictView[],
+  createdAt: string,
+  person: { readonly display_name: string },
+  assembledOn: string,
+  sources: readonly Pick<Source, 'title'>[],
 ): InspectArtifactView[] {
-  const claimsById = new Map<string, Pick<Claim, 'verified_substring'>>();
-  for (const [id, claim] of claimById) claimsById.set(id, { verified_substring: claim.verified_substring });
+  // `quote` is required alongside `verified_substring` now: `citedSpansFor`
+  // (lib/ai/artifacts.ts) needs the verbatim quote behind a fact's supporting
+  // claim to tell `filterOutput` a composed condition name is genuinely
+  // cited — passing an empty list used to make every condition name read as
+  // uncited, which is how Margaret's own heart-failure diagnosis was being
+  // suppressed from her GP brief.
+  const claimsById = new Map<string, BackingClaim>();
+  for (const [id, claim] of claimById) {
+    claimsById.set(id, { verified_substring: claim.verified_substring, quote: claim.quote });
+  }
 
   const factsById = new Map(rawFacts.map((f) => [f.id, f] as const));
   const questionByConflictId = new Map(conflicts.map((c) => [c.id, c.generated_question] as const));
 
   return loadTemplates().map((template) => {
-    const { artifact, omissions } = buildArtifact({ template, facts: rawFacts, claimsById, personId });
+    const { artifact, omissions, structuralAssertions, suppressions } = buildArtifact({
+      template,
+      facts: rawFacts,
+      claimsById,
+      personId,
+      createdAt,
+      person,
+      assembledOn,
+      sources,
+    });
     return artifactViewFor(
       template,
       artifact,
       omissions,
+      structuralAssertions,
+      suppressions,
       factsById,
       claimById,
       sourcesById,
@@ -402,10 +467,56 @@ async function reportsFor(mode: Mode): Promise<{ reports: ExtractionReport[]; no
 export async function GET(request: Request): Promise<Response> {
   const mode: Mode = resolveMode({ searchParam: new URL(request.url).searchParams.get('mode') });
 
+  // This route owns the clock. `lib/ai/**` (`buildArtifact`, `projectAll`)
+  // and `lib/detectors/gaps.ts` are pure and take a `Date`/ISO string as an
+  // explicit argument rather than reading `new Date()` themselves — that is
+  // what makes two builds of identical evidence comparable, and what keeps
+  // gap detection's elapsed-deadline reasoning deterministic given the same
+  // inputs. One `now` is constructed here, per request, and threaded down.
+  const now = new Date();
+  const createdAt = now.toISOString();
+  const assembledOn = now.toISOString().slice(0, 10);
+
   try {
     const { reports, note } = await reportsFor(mode);
-    const { conflicts, facts, rawFacts, claimById, sourcesById } = reconcileViewsFor(reports);
-    const artifacts = artifactsFor(rawFacts, claimById, sourcesById, fixture.person.id, conflicts);
+    const { conflicts, rawConflicts, facts, rawFacts, claimById, sourcesById } = reconcileViewsFor(reports);
+
+    // `fixture.sources` is a stand-in for the same reason `fixture.person.id`
+    // already is above: no source registry is persisted anywhere in this
+    // lane yet, so the fixture's own sources are the only ones available
+    // regardless of mode. `referencedDocumentAbsent` (lib/detectors/gaps.ts)
+    // needs each source's full transcript, which `ExtractionReport.source`
+    // does not carry (it is a `Pick<Source, 'id'|'title'|'kind'>`).
+    const gaps = detectGaps(rawFacts, fixture.sources, now);
+
+    // Two ontology namespaces the templates declare but no Fact producer
+    // fills (`conflict.*`, `gap.*`) are projected into ordinary Facts here
+    // and concatenated with the reconciled set below — slot resolution needs
+    // no special case for them. `source.inventory` and `person.identity` are
+    // NOT projected as facts (see the header of lib/ai/projections.ts): the
+    // pack's own document list and the person's name are metadata about the
+    // pack, not a claim about the person, and are filled via
+    // `BuildArtifactInput.sources` / `.person` on the structural/metadata
+    // path in `buildArtifact` instead. `fixture.person.display_name` /
+    // `fixture.sources` are stand-ins until a person/source registry exists,
+    // the same as `fixture.person.id` elsewhere in this route.
+    const projected = projectAll({
+      personId: fixture.person.id,
+      conflicts: rawConflicts,
+      gaps,
+    });
+
+    const artifacts = artifactsFor(
+      [...rawFacts, ...projected],
+      claimById,
+      sourcesById,
+      fixture.person.id,
+      conflicts,
+      createdAt,
+      { display_name: fixture.person.display_name },
+      assembledOn,
+      fixture.sources,
+    );
     return html(renderInspectPage(reports, note, conflicts, facts, artifacts));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

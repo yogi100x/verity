@@ -163,32 +163,39 @@ describe('GET /api/debug/inspect — every evidence-backed slot actually carries
 });
 
 describe('GET /api/debug/inspect — counts add up for both templates', () => {
-  it('filled + gap_prompted + omitted === slots_total, read off the rendered data attributes', async () => {
+  it('filled + verbatim_copy + gap_prompted + omitted === slots_total, read off the rendered data attributes', async () => {
     const artifactsSection = await getArtifactsSection();
     const cards = [
       ...artifactsSection.matchAll(
-        /data-slots-total="(\d+)" data-filled="(\d+)" data-gap-prompted="(\d+)" data-omitted="(\d+)"/g,
+        /data-slots-total="(\d+)" data-filled="(\d+)" data-verbatim-copy="(\d+)" data-gap-prompted="(\d+)" data-omitted="(\d+)"/g,
       ),
     ];
     expect(cards).toHaveLength(2);
-    for (const [, slotsTotalStr, filledStr, gapPromptedStr, omittedStr] of cards) {
+    for (const [, slotsTotalStr, filledStr, verbatimCopyStr, gapPromptedStr, omittedStr] of cards) {
       const slotsTotal = Number(slotsTotalStr);
       const filled = Number(filledStr);
+      const verbatimCopy = Number(verbatimCopyStr);
       const gapPrompted = Number(gapPromptedStr);
       const omitted = Number(omittedStr);
-      expect(filled + gapPrompted + omitted).toBe(slotsTotal);
+      expect(filled + verbatimCopy + gapPrompted + omitted).toBe(slotsTotal);
       expect(slotsTotal).toBeGreaterThan(0);
     }
   });
 });
 
-describe('GET /api/debug/inspect — an omitted structural slot is NAMED on the page', () => {
+describe('GET /api/debug/inspect — the structural slots the route now fills are rendered as verbatim copy, not omitted', () => {
   /** The reviewed defect: the CHC pack's cover subject, cover scope and method
    *  provenance slots produced no assertion and vanished behind a bare
    *  "3 omitted", so a reviewer could not tell three missing structural pages
-   *  from three empty clinical domains. Derived from the frozen template — no
-   *  slot key is listed here. */
-  it('every non-evidence structural slot appears by label, with a reason, in the rendered page', async () => {
+   *  from three empty clinical domains. The route now supplies `person` and
+   *  `assembledOn` on every request (see `GET`, `app/api/debug/inspect/route.ts`),
+   *  so these slots are no longer omitted at all — they render as fixed,
+   *  verbatim copy (`state="verbatim_copy"`), distinguishable from both
+   *  evidence-backed and gap-prompted slots. `lib/ai/__tests__/projections-wiring.test.ts`
+   *  covers the exact copy each one renders; this file only checks that the
+   *  route wires the inputs through so none of them fall back to omission.
+   *  Derived from the frozen template — no slot key is listed here. */
+  it('every structural (verbatim-copy) slot renders filled, by label, never as an omission', async () => {
     const artifactsSection = await getArtifactsSection();
     const structural = slotsOf(templateByKey('chc_dst_pack_v1'))
       .map((s) => s.slot)
@@ -198,11 +205,15 @@ describe('GET /api/debug/inspect — an omitted structural slot is NAMED on the 
     for (const slot of structural) {
       expect(
         artifactsSection,
-        `slot ${slot.key} was left out of the pack without being named on the page`,
-      ).toContain(`data-omitted-slot-key="${slot.key}"`);
+        `slot ${slot.key} was left out of the pack instead of filling from copy`,
+      ).toContain(`data-slot-key="${slot.key}" data-renderer="${slot.renderer}" data-state="verbatim_copy"`);
       expect(artifactsSection).toContain(slot.label);
+      expect(artifactsSection).not.toContain(`data-omitted-slot-key="${slot.key}"`);
     }
-    expect(artifactsSection).toContain('data-omission-reason="awaiting_fixed_copy"');
+    // The one omission reason these three slots used to carry, when Lane A
+    // had no person/assembledOn to supply, no longer appears anywhere on the
+    // page — every awaiting_fixed_copy slot template-wide is now filled.
+    expect(artifactsSection).not.toContain('data-omission-reason="awaiting_fixed_copy"');
   });
 
   it('the named omissions on each card match its own omitted count', async () => {
@@ -218,13 +229,17 @@ describe('GET /api/debug/inspect — an omitted structural slot is NAMED on the 
     }
   });
 
-  it('no fabricated scope or disclaimer copy is invented for the slots awaiting it', async () => {
-    // `prd.md` §8.5 fixes the disclaimer wording verbatim and it belongs to
-    // Lane C's lib/copy/**. Lane A must not paraphrase it into the pack.
+  it('the persistent banner and provenance footer now render legitimately, verbatim, not paraphrased', async () => {
+    // `prd.md` §8.5 fixes this disclaimer wording verbatim and it belongs to
+    // Lane C's lib/copy/**. Before this PR wired `person`/`assembledOn` into
+    // the route, these slots stayed omitted and this exact copy could never
+    // legitimately appear — Lane A paraphrasing it would have been the
+    // failure. Now that the route supplies real inputs, the SAME strings are
+    // the correct, intended output: Lane C's own copy, rendered unaltered.
     const artifactsSection = await getArtifactsSection();
-    expect(artifactsSection).not.toContain('not a clinical record');
-    expect(artifactsSection).not.toContain('not a clinical summary');
-    expect(artifactsSection).not.toContain('has not been reviewed by a clinician');
+    expect(artifactsSection).toContain('not a clinical record');
+    expect(artifactsSection).toContain('not a clinical summary');
+    expect(artifactsSection).toContain('has not been reviewed by a clinician');
   });
 });
 
@@ -270,11 +285,19 @@ describe('GET /api/debug/inspect — no judgement key anywhere in the built arte
     const { facts } = reconcile(fixture.claims, fixture.person.id, {
       sourcesById: fixtureSourcesById(),
     });
-    const claimsById = new Map(fixture.claims.map((c) => [c.id, { verified_substring: c.verified_substring }]));
+    const claimsById = new Map(
+      fixture.claims.map((c) => [c.id, { verified_substring: c.verified_substring, quote: c.quote }]),
+    );
 
     const keys = new Set<string>();
     for (const template of loadTemplates()) {
-      const result = buildArtifact({ template, facts, claimsById, personId: fixture.person.id });
+      const result = buildArtifact({
+        template,
+        facts,
+        claimsById,
+        personId: fixture.person.id,
+        createdAt: '2026-07-25T00:00:00.000Z',
+      });
       collectKeys(result, keys);
     }
     for (const key of keys) {
@@ -318,6 +341,9 @@ describe('renderInspectPage — artefacts escaping', () => {
                 },
               ],
               state: 'filled',
+              verbatim_attribution: null,
+              verbatim_source: null,
+              suppression: null,
             },
             {
               slot_key: 'breathing.suggested_level',
@@ -331,11 +357,39 @@ describe('renderInspectPage — artefacts escaping', () => {
               citation_verified: false,
               citations: [],
               state: 'gap_prompt',
+              verbatim_attribution: null,
+              verbatim_source: null,
+              // The suppression note is the only thing that distinguishes a
+              // withheld slot from an empty one, and every field it
+              // interpolates — including `filterOutput`'s own reported term —
+              // must be escaped like everything else on this page.
+              suppression: {
+                reason: '<script>alert(18)</script>',
+                withheld_fact_count: 2,
+                filter_reason: '<script>alert(19)</script>',
+                filter_term: '<script>alert(20)</script>',
+              },
+            },
+            {
+              slot_key: 'breathing.verbatim',
+              label: '<script>alert(15)</script>',
+              renderer: 'quote',
+              text: '<script>alert(16)</script> fixed wording',
+              gap_prompt: null,
+              values: [],
+              conflict_questions: [],
+              form_invalid_levels: [],
+              citation_verified: false,
+              citations: [],
+              state: 'verbatim_copy',
+              verbatim_attribution: '<script>alert(17)</script> ref',
+              verbatim_source: 'framework_citation',
+              suppression: null,
             },
           ],
         },
       ],
-      counts: { slots_total: 3, filled: 1, gap_prompted: 1, omitted: 1 },
+      counts: { slots_total: 4, filled: 1, verbatim_copy: 1, gap_prompted: 1, omitted: 1, suppressed: 1 },
       omissions: [
         {
           slot_key: 'breathing.hostile',
@@ -369,9 +423,9 @@ describe('renderInspectPage — artefacts escaping', () => {
     expect(artifactsSection).not.toContain('</script>');
     expect(artifactsSection).not.toContain('<img src=x onerror=alert(1)>');
     // Every hostile payload above — including the ones only the new
-    // renderer-aware and omission code paths can reach — must be escaped, so
-    // no alert() number may survive unescaped.
-    for (let n = 1; n <= 14; n += 1) {
+    // renderer-aware, verbatim-copy and omission code paths can reach — must
+    // be escaped, so no alert() number may survive unescaped.
+    for (let n = 1; n <= 20; n += 1) {
       expect(artifactsSection).not.toContain(`<script>alert(${n})`);
     }
     // The escaped form must still be present, proving the value was rendered
