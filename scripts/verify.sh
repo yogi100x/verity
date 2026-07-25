@@ -32,8 +32,15 @@ else
   bad "lib/contracts.ts MODIFIED — the contract is frozen. Revert, and put the request in your PR description instead."
 fi
 
+# The orchestrator's key: ALLOW_FIXTURES=orchestrator ./scripts/verify.sh (or
+# prefixed on git commit) lets a deliberate fixture edit through. Every other
+# check still runs; lanes are still blocked. Using the key is visible in the
+# command you typed and in the commit that results — that visibility is the
+# audit trail.
 if git diff --quiet HEAD -- fixtures/ 2>/dev/null; then
   ok "fixtures/ unmodified"
+elif [ "${ALLOW_FIXTURES:-}" = "orchestrator" ]; then
+  ok "fixtures/ modified under ALLOW_FIXTURES=orchestrator (deliberate orchestrator edit)"
 else
   bad "fixtures/ MODIFIED — orchestrator only, and never during a night shift."
 fi
