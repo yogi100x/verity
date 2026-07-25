@@ -35,7 +35,7 @@ bold "1/6  Prerequisites"
 
 command -v node >/dev/null || die "node not found"
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-[ "$NODE_MAJOR" -ge 20 ] || die "node 20+ required, found $(node -v)"
+[ "$NODE_MAJOR" -ge 22 ] || die "node 22 required (see docs/stack-freeze.md), found $(node -v)"
 ok "node $(node -v)"
 
 command -v pnpm >/dev/null || die "pnpm not found. Install with: npm i -g pnpm"

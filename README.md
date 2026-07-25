@@ -59,26 +59,25 @@ demo/
   documents/              Margaret's synthetic dataset
 
 scripts/
-  bootstrap.sh            hour 0, one command
+  bootstrap.sh            historical — exits early; scaffold is committed
   db-push.sh              apply schema + RLS
-  verify.sh               pre-PR check
+  verify.sh               pre-PR check (hooks run it automatically)
 
 research/                 the four decision documents behind all of it
 ```
 
 ---
 
-## Hour 0 — one command
+## Hour 0
 
 ```bash
-./scripts/bootstrap.sh
+pnpm install    # deps + husky hooks
+pnpm test       # THE GATE — 20 tests, must be green
 ```
 
-Scaffolds Next.js, installs the frozen stack, wires Vitest, appends the design
-tokens, and runs the keystone test. Idempotent — safe to re-run. It never
-touches `lib/contracts.ts`, `fixtures/`, `docs/` or the README.
+The Next.js scaffold is **already committed**. Do not run `scripts/bootstrap.sh` — it predates the scaffold and exits early by design.
 
-**If it ends RED, do not launch lanes.** Every lane would build against a lie.
+**If tests are red, do not launch lanes.** Every lane would build against a lie.
 
 Then:
 
