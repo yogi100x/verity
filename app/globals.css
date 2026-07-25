@@ -1,26 +1,199 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Verity design tokens — source of truth is docs/design.md.
+ * No dark theme, deliberately. Emergency red is legal ONLY in the safety
+ * banner and the 999 halt card.
+ */
+
+@theme {
+  /* colour */
+  --color-paper: #faf7f2;
+  --color-surface: #ffffff;
+  --color-ink: #1c1b1a;
+  --color-ink-secondary: #55504a;
+  --color-hairline: #e7e1d8;
+  --color-brand: #14453d;
+
+  --color-cite-fill: #e4efec;
+  --color-cite-border: #a9c9c2;
+  --color-cite-text: #14453d;
+
+  --color-unverified-fill: #fbeadd;
+  --color-unverified-border: #e8b98c;
+  --color-unverified-text: #9a4a15;
+
+  --color-conflict-fill: #fff4d6;
+  --color-conflict-border: #e0b94a;
+  --color-conflict-text: #7a5c05;
+
+  --color-emergency: #b3261e;
+  --color-emergency-fill: #fdedec;
+  --color-emergency-border: #f0c4c1;
+
+  /* type — three families, one job each */
+  --font-display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
+  --font-sans: var(--font-public-sans), -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+
+  /* scale — root 18px, set on html below */
+  --text-display-xl: 3.5rem;
+  --text-display-xl--line-height: 1.05;
+  --text-display-l: 2.25rem;
+  --text-display-l--line-height: 1.15;
+  --text-display-m: 1.375rem;
+  --text-display-m--line-height: 1.3;
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.35;
+  --text-body-l: 1.125rem;
+  --text-body-l--line-height: 1.6;
+  --text-body: 1rem;
+  --text-body--line-height: 1.6;
+  --text-body-s: 0.875rem;
+  --text-body-s--line-height: 1.5;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.4;
+  --text-mono: 0.875rem;
+  --text-mono--line-height: 1.55;
+  --text-mono-s: 0.75rem;
+  --text-mono-s--line-height: 1.4;
+
+  /* radius: 4px data chips · 12px content cards · 20px highest-commitment CTA */
+  --radius-chip: 4px;
+  --radius-card: 12px;
+  --radius-cta: 20px;
+
+  /* the one shadow — bottom sheets and modals only */
+  --shadow-sheet: 0 -4px 24px rgba(28, 27, 26, 0.08);
+
+  /* motion */
+  --ease-entry: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html {
+  font-size: 18px;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@media (max-width: 480px) {
+  html {
+    font-size: 20px;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* visible keyboard path everywhere */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* entry animations */
+@keyframes verity-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes verity-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes verity-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-timeline-entry {
+  animation: verity-rise 320ms var(--ease-entry) both;
+}
+.animate-conflict-entry {
+  /* the only scaling transition in the product */
+  animation: verity-scale-in 400ms var(--ease-entry) both;
+}
+.animate-question-beat {
+  /* the deliberate 400ms beat of silence before the payoff */
+  animation: verity-fade 400ms ease-out 400ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 100ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 100ms !important;
+  }
+  .animate-timeline-entry,
+  .animate-conflict-entry,
+  .animate-question-beat {
+    animation-name: verity-fade;
+  }
+}
+
+/* ---------- print — A4, handed to a clinician ---------- */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  /* Every type token is rem-based, so re-basing the root collapses the whole
+     scale to print proportions: body (1rem) = 11pt, body-l ≈ 12.4pt, mono ≈
+     9.6pt. Masthead and footer are then pinned in pt below. */
+  html {
+    font-size: 11pt;
+  }
+  body {
+    background: #fff;
+  }
+  .print-columns {
+    column-count: 2;
+    column-gap: 2rem;
+  }
+  .print-avoid-break,
+  table {
+    break-inside: avoid;
+  }
+  .print-masthead {
+    font-size: 18pt;
+  }
+  .print-footer {
+    font-size: 9pt;
+  }
+  /* colour prints unreliably; the document must survive a bad office printer */
+  .chip-citation {
+    background: #fff !important;
+    border: none !important;
+    border-bottom: 1px solid #000 !important;
+    color: #000 !important;
+  }
+  .conflict-surface {
+    background: #e0e0e0 !important;
+    border-color: #bdbdbd !important;
+  }
 }
